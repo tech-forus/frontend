@@ -251,9 +251,9 @@ const ContactUsPage: React.FC = () => {
                 <ContactInfoItem
                   icon={Phone}
                   title="Call Us"
-                  href="tel:+911234567890"
+                  href="tel:+911140366378"
                 >
-                  +91 12345 67890
+                  +911140366378
                 </ContactInfoItem>
                 <ContactInfoItem icon={MapPin} title="Our Office">
                   Building No. 313,<br />
