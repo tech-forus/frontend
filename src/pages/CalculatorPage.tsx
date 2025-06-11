@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { BoxDetails as BoxDetailsType, ShipmentOverviewType } from "../types";
 import BoxDetailsRow from "../components/BoxDetailsRow";
 import { calculateTotals, generateNewBox } from "../utils/calculations";
-import { calculateVendorQuotes } from "../data/vendors";
 import {
   Calculator as CalculatorIcon,
   Navigation,
@@ -33,7 +32,7 @@ type VendorQuote = {
 };
 
 // Type helper
-type DisplayVendorQuote = ReturnType<typeof calculateVendorQuotes>[number];
+
 
 const CalculatorPage: React.FC = () => {
   // Shipment Overview State
@@ -48,7 +47,7 @@ const CalculatorPage: React.FC = () => {
     actualWeight: undefined,
   });
 
-  const { isAuthenticated, user } = useAuth();
+  const { user } = useAuth();
 
   // Box details
   const [boxes, setBoxes] = useState<BoxDetailsType[]>([]);
@@ -59,7 +58,6 @@ const CalculatorPage: React.FC = () => {
   // Quotes
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showResults, setShowResults] = useState(false);
 
   const [data, setData] = useState<VendorQuote[] | null>(null);
 
@@ -134,7 +132,6 @@ const CalculatorPage: React.FC = () => {
       console.error(e);
     } finally {
       setIsCalculating(false);
-      setShowResults(true);
       setTimeout(() => {
         document
           .getElementById("results")
