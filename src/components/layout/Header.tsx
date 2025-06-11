@@ -53,7 +53,7 @@ const Header: React.FC = () => {
             {isAuthenticated && (
               <>
                 <span className="text-sm text-gray-700 hidden md:inline">
-                  Hi, {(user as any).customer.name.split(' ')[0]}
+                  Hi,  {(user as any).customer.firstName}
                 </span>
                 <Link to="/compare" className="text-sm text-gray-700 hover:text-blue-700">Compare Prices</Link>
               </>
@@ -120,7 +120,7 @@ const Header: React.FC = () => {
                   Profile
                 </Link>
                 <div className="text-sm text-gray-700">
-                  Hi, {(user as any).customer.name.split(' ')[0]}
+                  Hi,  {(user as any).customer.firstName}
                 </div>
                 <button
                   onClick={handleSignOut}

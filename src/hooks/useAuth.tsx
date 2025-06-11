@@ -5,7 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 
 interface JwtPayload {
   _id: string;
-  mailId: string;
+  email: string;
   name: string;
   companyName?: string;
   contactNumber?: string;
@@ -20,7 +20,7 @@ interface JwtPayload {
 
 interface AuthUser {
   _id: string;
-  mailId: string;
+  email: string;
   name: string;
   companyName?: string;
   contactNumber?: string;
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // ACTUAL API LOGIN
     try {
       const response = await axios.post("http://localhost:8000/api/auth/login", {
-        mailId: lowerEmail,
+        email: lowerEmail,
         password: pass,
       });
 

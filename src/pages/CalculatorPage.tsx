@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { BoxDetails as BoxDetailsType, ShipmentOverviewType } from "../types";
 import BoxDetailsRow from "../components/BoxDetailsRow";
-import VendorComparison from "../components/VendorComparison";
 import { calculateTotals, generateNewBox } from "../utils/calculations";
 import { calculateVendorQuotes } from "../data/vendors";
 import {
   Calculator as CalculatorIcon,
-  CalendarDays,
   Navigation,
   MapPin,
   MoveRight,
-  PackageSearch,
   Weight,
   Plus,
   Download,
@@ -60,7 +57,6 @@ const CalculatorPage: React.FC = () => {
   const [isFragileShipment, setIsFragileShipment] = useState(false);
 
   // Quotes
-  const [vendorQuotes, setVendorQuotes] = useState<DisplayVendorQuote[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
@@ -70,9 +66,6 @@ const CalculatorPage: React.FC = () => {
   // Totals
   const totals = calculateTotals(boxes);
 
-  // Controlled fields (for readOnly auto fields)
-  const totalBoxes = totals.totalBoxes;
-  const totalWeight = totals.totalWeight;
 
   // Input change handler
   function handleChange(
@@ -97,21 +90,6 @@ const CalculatorPage: React.FC = () => {
     setBoxes((prev) => prev.filter((box) => box.id !== id));
   };
 
-  // Simple mock-distance based on pincode prefixes (for demo)
-  const computeMockDistance = (): number => {
-    let mockDistance = 100;
-    try {
-      const o = parseInt((shipment.shipperLocation || "").slice(0, 3), 10);
-      const d = parseInt((shipment.destination || "").slice(0, 3), 10);
-      if (!isNaN(o) && !isNaN(d)) {
-        mockDistance = Math.abs(o - d) * 5 + 50;
-        if (mockDistance < 10) mockDistance = 10;
-      }
-    } catch {
-      // keep default
-    }
-    return mockDistance;
-  };
 
   // Main quote calculation
   const calculateQuotes = async () => {
