@@ -1,21 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { BoxDetails as BoxDetailsType, ShipmentOverviewType } from "../types";
-import BoxDetailsRow from "../components/BoxDetailsRow";
-import { calculateTotals, generateNewBox } from "../utils/calculations";
 import {
   Calculator as CalculatorIcon,
   Navigation,
   MapPin,
   MoveRight,
   Weight,
-  Plus,
   Download,
   ArrowRight,
   CalendarClock,
   DollarSign,
 } from "lucide-react";
 import axios from "axios";
-import { useAuth } from "../hooks/useAuth";
+
 
 type VendorQuote = {
   transporterData: any;
@@ -31,62 +27,26 @@ type VendorQuote = {
   isBestValue?: boolean;
 };
 
-// Type helper
-
 
 const CalculatorPage: React.FC = () => {
-  // Shipment Overview State
-  const today = new Date().toISOString().split("T")[0];
-  const [shipment, setShipment] = useState<ShipmentOverviewType>({
-    date: today,
-    shipperLocation: "",
-    destination: "",
-    modeOfTransport: "Road",
-    totalBoxes: 0,
-    totalWeight: 0,
-    actualWeight: undefined,
-  });
-
-  const { user } = useAuth();
-
-  // Box details
-  const [boxes, setBoxes] = useState<BoxDetailsType[]>([]);
-  // Shipment options
   const [isExpressShipment, setIsExpressShipment] = useState(false);
   const [isFragileShipment, setIsFragileShipment] = useState(false);
 
-  // Quotes
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [data, setData] = useState<VendorQuote[] | null>(null);
 
-  // Totals
-  const totals = calculateTotals(boxes);
 
-
-  // Input change handler
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) {
-    const { name, value, type } = e.target;
-    setShipment((prev) => ({
-      ...prev,
-      [name]:
-        type === "number" ? Number(value) : value === "" ? undefined : value,
-    }));
-  }
-
-  // Add/Update/Remove box logic
-  const addNewBox = () => setBoxes((prev) => [...prev, generateNewBox(prev)]);
-  const updateBox = (id: string, updates: Partial<BoxDetailsType>) => {
-    setBoxes((prev) =>
-      prev.map((box) => (box.id === id ? { ...box, ...updates } : box))
-    );
-  };
-  const removeBox = (id: string) => {
-    setBoxes((prev) => prev.filter((box) => box.id !== id));
-  };
+  const [modeOfTransport, setModeOfTransport] = useState<'Road'|'Rail'|'Air'|'Ship'>('Road');
+  const [fromPincode, setfromPincode] = useState("");
+  const [toPincode, settoPincode] = useState("");
+  const [noofboxes, setnoofboxes] = useState(0);
+  const [quantity, setquantity] = useState(0);
+  const [length, setlength] = useState(0);
+  const [width, setwidth] = useState(0);
+  const [height, setheight] = useState(0);
+  const [weightperbox, setweightperbox] = useState(0);
 
 
   // Main quote calculation
@@ -95,35 +55,35 @@ const CalculatorPage: React.FC = () => {
 
     const pincodeRegex = /^\d{6}$/;
     if (
-      !pincodeRegex.test(shipment.shipperLocation) ||
-      !pincodeRegex.test(shipment.destination)
+      !pincodeRegex.test(fromPincode) ||
+      !pincodeRegex.test(toPincode)
     ) {
       setError("Please enter valid 6-digit Origin and Destination Pincodes.");
       return;
     }
-    if (boxes.length === 0) {
-      setError("Please add at least one box to calculate shipping costs.");
-      return;
-    }
+
 
     setIsCalculating(true);
 
     try {
-
-      const actualWeight =
-        shipment.actualWeight ?? totals.chargeableWeight ?? totals.totalWeight;
-      const volumetricWeight = totals.totalVolumetricWeight;
-
-      // Call your local quote calculator
-      // Send data to backend
-      const calcWeigth = Math.max(actualWeight, volumetricWeight);
+      
       const response = await axios.post(
         "http://localhost:8000/api/transporter/calculate",
-        { customerId: (user as any).customer.id, pincode: shipment.destination, weight: calcWeigth }
+        {
+          //customerId: (user as any).customer.id,
+          modeoftransport: modeOfTransport,
+          fromPincode: fromPincode,
+          toPincode: toPincode,
+          noofboxes: noofboxes,
+          quantity: quantity,
+          length: length,
+          width: width,
+          height: height,
+          weight: weightperbox,
+        }
       );
 
-
-      if (response.data.success) {
+      if (response) {
         console.log(response.data);
         setData(response.data.result);
       }
@@ -142,12 +102,8 @@ const CalculatorPage: React.FC = () => {
 
   // Sync totalBoxes & totalWeight into shipment for display
   useEffect(() => {
-    setShipment((prev) => ({
-      ...prev,
-      totalBoxes: totals.totalBoxes,
-      totalWeight: totals.totalWeight,
-    }));
-  }, [totals.totalBoxes, totals.totalWeight]);
+    
+  });
 
   return (
     <div className="container mx-auto p-4">
@@ -167,8 +123,8 @@ const CalculatorPage: React.FC = () => {
             <select
               name="modeOfTransport"
               id="modeOfTransport"
-              value={shipment.modeOfTransport}
-              onChange={handleChange}
+              value={modeOfTransport}
+              onChange={(e) => setModeOfTransport(e.target.value as any)}
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
             >
               <option value="Road">Road</option>
@@ -177,6 +133,9 @@ const CalculatorPage: React.FC = () => {
               <option value="Ship">Ship</option>
             </select>
           </div>
+          <p className="mt-2 text-sm">
+            Currently selected: <strong>{modeOfTransport}</strong>
+          </p>
         </div>
         <div>
           <label
@@ -193,8 +152,8 @@ const CalculatorPage: React.FC = () => {
               type="text"
               name="shipperLocation"
               id="shipperLocation"
-              value={(user as any)?.customer?.pincode || shipment.shipperLocation}
-              onChange={handleChange}
+              value={fromPincode}
+              onChange={(e) => setfromPincode(e.target.value)}
               placeholder="e.g., 400001"
               maxLength={6}
               pattern="\d{6}"
@@ -218,8 +177,8 @@ const CalculatorPage: React.FC = () => {
               type="text"
               name="destination"
               id="destination"
-              value={shipment.destination}
-              onChange={handleChange}
+              value={toPincode}
+              onChange={(e) => settoPincode(e.target.value)}
               placeholder="e.g., 110001"
               maxLength={6}
               pattern="\d{6}"
@@ -231,95 +190,178 @@ const CalculatorPage: React.FC = () => {
       </div>
 
       {/* --- Box Details Entry --- */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-800">
-            Box-wise Shipment Details
-          </h2>
-          <button
-            type="button"
-            onClick={addNewBox}
-            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm transition-colors"
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-6 mx-auto">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
+        Shipment Details
+      </h2>
+      <form className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Number of Boxes */}
+        <div className="flex flex-col">
+          <label htmlFor="numberOfBoxes" className="mb-1 text-gray-700 font-medium">
+            Number of Boxes
+          </label>
+          <input
+            id="numberOfBoxes"
+            type="number"
+            name="numberOfBoxes"
+            value={noofboxes}
+            onChange={(e) => setnoofboxes(Number(e.target.value))}
+            min={1}
+            placeholder="Enter number of boxes"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Quantity per Box */}
+        <div className="flex flex-col">
+          <label htmlFor="qtyPerBox" className="mb-1 text-gray-700 font-medium">
+            Quantity per Box
+          </label>
+          <input
+            id="qtyPerBox"
+            type="number"
+            name="qtyPerBox"
+            value={quantity}
+            onChange={(e) => setquantity(Number(e.target.value))}
+            min={1}
+            placeholder="Enter quantity per box"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Total Quantity */}
+        <div className="flex flex-col">
+          <label htmlFor="totalQty" className="mb-1 text-gray-700 font-medium">
+            Total Quantity
+          </label>
+          <input
+            id="totalQty"
+            type="number"
+            name="totalQty"
+            value={quantity * noofboxes}
+            readOnly
+            className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg"
+          />
+        </div>
+
+        {/* Length (L) */}
+        <div className="flex flex-col">
+          <label htmlFor="length" className="mb-1 text-gray-700 font-medium">
+            Length (L)
+          </label>
+          <input
+            id="length"
+            type="number"
+            name="length"
+            value={length}
+            onChange={(e) => setlength(Number(e.target.value))}
+            min={0}
+            placeholder="L"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Width (W) */}
+        <div className="flex flex-col">
+          <label htmlFor="width" className="mb-1 text-gray-700 font-medium">
+            Width (W)
+          </label>
+          <input
+            id="width"
+            type="number"
+            name="width"
+            value={width}
+            onChange={(e) => setwidth(Number(e.target.value))}
+            min={0}
+            placeholder="W"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Height (H) */}
+        <div className="flex flex-col">
+          <label htmlFor="height" className="mb-1 text-gray-700 font-medium">
+            Height (H)
+          </label>
+          <input
+            id="height"
+            type="number"
+            name="height"
+            value={height}
+            onChange={(e) => setheight(Number(e.target.value))}
+            min={0}
+            placeholder="H"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Weight per Box */}
+        <div className="flex flex-col">
+          <label htmlFor="weightPerBox" className="mb-1 text-gray-700 font-medium">
+            Weight per Box
+          </label>
+          <input
+            id="weightPerBox"
+            type="number"
+            name="weightPerBox"
+            value={weightperbox}
+            onChange={(e) => setweightperbox(Number(e.target.value))}
+            min={0}
+            step="0.01"
+            placeholder="Weight"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {/* Total Weight */}
+        <div className="flex flex-col">
+          <label htmlFor="totalWeight" className="mb-1 text-gray-700 font-medium">
+            Total Weight
+          </label>
+          <input
+            id="totalWeight"
+            type="number"
+            name="totalWeight"
+            value={weightperbox * noofboxes}
+            readOnly
+            className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg"
+          />
+        </div>
+
+        {/* UOM spans two columns */}
+        <div className="flex flex-col md:col-span-1">
+          <label htmlFor="uom" className="mb-1 text-gray-700 font-medium">
+            Unit of Measure (UOM)
+          </label>
+          <select
+            id="uom"
+            name="uom"
+            value={"uom"}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <Plus size={16} /> Add Box
-          </button>
+            <option value="pcs">pcs</option>
+            <option value="kg">kg</option>
+            <option value="ltr">ltr</option>
+            <option value="box">box</option>
+          </select>
         </div>
-        <div className="overflow-x-auto">
-          <div className="min-w-max">
-            {/* Header */}
-            <div className="grid grid-cols-12 gap-2 mb-2 bg-gray-50 p-2 rounded-md text-sm font-medium text-gray-700">
-              <div className="col-span-1">S.No</div>
-              <div className="col-span-1">Boxes</div>
-              <div className="col-span-1">Qty/Box</div>
-              <div className="col-span-1">Total Qty</div>
-              <div className="col-span-1">Length</div>
-              <div className="col-span-1">Width</div>
-              <div className="col-span-1">Height</div>
-              <div className="col-span-1">Weight/Box</div>
-              <div className="col-span-1">Total Weight</div>
-              <div className="col-span-2">Description</div>
-              <div className="col-span-1">UOM</div>
-            </div>
-            {/* Box rows */}
-            {boxes.map((box) => (
-              <BoxDetailsRow
-                key={box.id}
-                box={box}
-                updateBox={updateBox}
-                removeBox={removeBox}
-                mode={shipment.modeOfTransport}
-              />
-            ))}
-            {boxes.length === 0 && (
-              <div className="text-center py-4 text-gray-500">
-                No boxes added yet. Click "Add Box" to start.
-              </div>
-            )}
-          </div>
+
+        {/* Description spans two columns */}
+        <div className="flex flex-col md:col-span-2">
+          <label htmlFor="description" className="mb-1 text-gray-700 font-medium">
+            Description
+          </label>
+          <input
+            id="description"
+            type="text"
+            name="description"
+            value={"description"}
+            placeholder="Item description"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
-        {/* Totals summary */}
-        {boxes.length > 0 && (
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div className="bg-gray-50 p-3 rounded-md">
-              <h3 className="text-sm font-medium text-gray-700 mb-1">
-                Total Volumetric Weight
-              </h3>
-              <p className="text-lg font-semibold text-blue-600">
-                {boxes
-                  .reduce((sum, box) => sum + (box.volumetricWeight || 0), 0)
-                  .toFixed(2)}{" "}
-                kg
-              </p>
-            </div>
-            <div className="bg-gray-50 p-3 rounded-md">
-              <h3 className="text-sm font-medium text-gray-700 mb-1">
-                Total Actual Weight
-              </h3>
-              <p className="text-lg font-semibold text-blue-600">
-                {boxes
-                  .reduce((sum, box) => sum + (box.totalWeight || 0), 0)
-                  .toFixed(2)}{" "}
-                kg
-              </p>
-            </div>
-            <div className="bg-gray-50 p-3 rounded-md">
-              <h3 className="text-sm font-medium text-gray-700 mb-1">
-                Chargeable Weight
-              </h3>
-              <p className="text-lg font-semibold text-blue-600">
-                {Math.max(
-                  boxes.reduce((sum, box) => sum + (box.totalWeight || 0), 0),
-                  boxes.reduce(
-                    (sum, box) => sum + (box.volumetricWeight || 0),
-                    0
-                  )
-                ).toFixed(2)}{" "}
-                kg
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+      </form>
+    </div>
 
       {/* --- Express / Fragile Toggles --- */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -385,74 +427,78 @@ const CalculatorPage: React.FC = () => {
 
       {/* --- Results --- */}
       {data && (
-  <div id="results" className="mt-8">
-  <div className="bg-white rounded-lg shadow-md p-6">
-    <h2 className="text-xl font-semibold text-gray-800 mb-6">
-      Vendor Comparison
-    </h2>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      {data
-        .sort((a, b) => a.price - b.price) // Sort by price
-        .map((item, index) => (
-          <div
-            key={index}
-            className="rounded-lg border p-4 transition-all border-green-200 bg-green-50"
-          >
-            <div className="flex items-center gap-4 mb-3">
-              <div>
-                <h3 className="font-bold text-lg">{item.transporterData.companyName}</h3>
-              </div>
-            </div>
+        <div id="results" className="mt-8">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-6">
+              Vendor Comparison
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {data
+                .sort((a, b) => a.price - b.price) // Sort by price
+                .map((item, index) => (
+                  <div
+                    key={index}
+                    className="rounded-lg border p-4 transition-all border-green-200 bg-green-50"
+                  >
+                    <div className="flex items-center gap-4 mb-3">
+                      <div>
+                        <h3 className="font-bold text-lg">
+                          {item.transporterData.companyName}
+                        </h3>
+                      </div>
+                    </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
-                  <CalendarClock size={14} />
-                  <span>Delivery Time</span>
-                </div>
-                <p className="font-semibold">7 Days</p>
-              </div>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+                          <CalendarClock size={14} />
+                          <span>Delivery Time</span>
+                        </div>
+                        <p className="font-semibold">7 Days</p>
+                      </div>
 
-              <div>
-                <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
-                  <Weight size={14} />
-                  <span>Chargeable</span>
-                </div>
-                <p className="font-semibold">{item.chargeableWeight} kg</p>
-              </div>
+                      <div>
+                        <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+                          <Weight size={14} />
+                          <span>Chargeable</span>
+                        </div>
+                        <p className="font-semibold">
+                          {item.chargeableWeight} kg
+                        </p>
+                      </div>
 
-              <div>
-                <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
-                  <DollarSign size={14} />
-                  <span>Total Cost</span>
-                </div>
-                <p className="font-semibold text-blue-700">₹{item.totalPrice}</p>
-              </div>
-            </div>
+                      <div>
+                        <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+                          <DollarSign size={14} />
+                          <span>Total Cost</span>
+                        </div>
+                        <p className="font-semibold text-blue-700">
+                          ₹{item.totalPrice}
+                        </p>
+                      </div>
+                    </div>
 
-            <div className="flex justify-between mt-4">
-              <button
-                type="button"
-                className="text-sm text-gray-600 flex items-center gap-1 hover:text-gray-800 transition-colors"
-              >
-                <Download size={16} /> Download Quote
-              </button>
+                    <div className="flex justify-between mt-4">
+                      <button
+                        type="button"
+                        className="text-sm text-gray-600 flex items-center gap-1 hover:text-gray-800 transition-colors"
+                      >
+                        <Download size={16} /> Download Quote
+                      </button>
 
-              <button
-                type="button"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm flex items-center gap-1 transition-colors"
-              >
-                Book Now <ArrowRight size={16} />
-              </button>
+                      <button
+                        type="button"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm flex items-center gap-1 transition-colors"
+                      >
+                        Book Now <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
-        ))}
-    </div>
-  </div>
-</div>
-
-)}
-
+        </div>
+      )}
     </div>
   );
 };
