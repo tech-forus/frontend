@@ -1,32 +1,50 @@
 import React, { useState } from 'react';
 
 const Onboarding: React.FC = () => {
-  const [vendor, setVendor] = useState('');
+  // rename vendor to companyName
+  const [companyName, setCompanyName] = useState('');
+  // new transporter ID state
+  const [transporterId, setTransporterId] = useState('');
 
-  // State for additional charge fields
-  const [charges, setCharges] = useState({
-    docket: '',
-    fuelSurcharge: '',
-    fovCharge: '',
-    collectionCharge: '',
+  // Align charges state keys with schema
+  const [priceRate, setPriceRate] = useState({
+    minWeight: '',
+    docketCharges: '',
+    fuel: '',
+    rovVariable: '',
+    rovFixed: '',
+    inuaranceVariable: '',
+    inuaranceFixed: '',
+    odaVariable: '',
+    odaFixed: '',
+    codVariable: '',
+    codFixed: '',
+    prepaidVariable: '',
+    prepaidFixed: '',
+    topayVariable: '',
+    topayFixed: '',
+    handlingVariable: '',
+    handlingFixed: '',
+    fmVariable: '',
+    fmFixed: '',
+    appointmentVariable: '',
+    appointmentFixed: '',
+    divisor: '1',
+    minCharges: '0',
     greenTax: '',
-    handlingCharge: '',
-    daccCharge: '',
-    miscCharge: ''
+    daccCharges: '',
+    miscellanousCharges: ''
   });
+
+  const handleRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPriceRate(prev => ({ ...prev, [name]: value }));
+  };
 
   // Initialize a 14x14 matrix for zone-to-zone rates
   const initialMatrix = Array.from({ length: 14 }, () => Array(14).fill(''));
   const [matrix, setMatrix] = useState(initialMatrix);
-
-  // Define lowercase zone labels
   const zoneLabels = Array.from({ length: 14 }, (_, idx) => `Z${idx + 1}`);
-
-  // Handlers
-  const handleChargeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setCharges(prev => ({ ...prev, [name]: value }));
-  };
 
   const handleMatrixChange = (i: number, j: number, value: string) => {
     setMatrix(prev => {
@@ -36,83 +54,137 @@ const Onboarding: React.FC = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Build rates object: { z1: { z1: val, z2: val }, z2: {...} }
-    const rates: Record<string, Record<string, string>> = {};
+    // Build rates object: priceChart
+    const rates: Record<string, Record<string, number>> = {};
     matrix.forEach((row, i) => {
-      const from = zoneLabels[i];
-      rates[from] = row.reduce((acc, val, j) => {
-        acc[zoneLabels[j]] = val;
+      rates[zoneLabels[i]] = row.reduce((acc, val, j) => {
+        acc[zoneLabels[j]] = Number(val || 0);
         return acc;
-      }, {} as Record<string, string>);
+      }, {} as Record<string, number>);
     });
 
-    const payload = { vendor, charges, rates };
-    const jsonString = JSON.stringify(payload, null, 2);
-    console.log('Pricing JSON:', jsonString);
+    // Map UI state to schema payload
+    const payload = {
+      companyName,
+      prices: [
+        {
+          transporterid: transporterId,
+          priceRate: {
+            minWeight: Number(priceRate.minWeight || 0),
+            docketCharges: Number(priceRate.docketCharges),
+            fuel: Number(priceRate.fuel),
+            rovCharges: {
+              variable: Number(priceRate.rovVariable),
+              fixed: Number(priceRate.rovFixed)
+            },
+            inuaranceCharges: {
+              variable: Number(priceRate.inuaranceVariable),
+              fixed: Number(priceRate.inuaranceFixed)
+            },
+            odaCharges: {
+              variable: Number(priceRate.odaVariable),
+              fixed: Number(priceRate.odaFixed)
+            },
+            codCharges: {
+              variable: Number(priceRate.codVariable),
+              fixed: Number(priceRate.codFixed)
+            },
+            prepaidCharges: {
+              variable: Number(priceRate.prepaidVariable),
+              fixed: Number(priceRate.prepaidFixed)
+            },
+            topayCharges: {
+              variable: Number(priceRate.topayVariable),
+              fixed: Number(priceRate.topayFixed)
+            },
+            handlingCharges: {
+              variable: Number(priceRate.handlingVariable),
+              fixed: Number(priceRate.handlingFixed)
+            },
+            fmCharges: {
+              variable: Number(priceRate.fmVariable),
+              fixed: Number(priceRate.fmFixed)
+            },
+            appointmentCharges: {
+              variable: Number(priceRate.appointmentVariable),
+              fixed: Number(priceRate.appointmentFixed)
+            },
+            divisor: Number(priceRate.divisor),
+            minCharges: Number(priceRate.minCharges),
+            greenTax: Number(priceRate.greenTax),
+            daccCharges: Number(priceRate.daccCharges),
+            miscellanousCharges: Number(priceRate.miscellanousCharges)
+          }
+        }
+      ],
+      priceChart: rates
+    };
+
+    console.log('Generated payload:', JSON.stringify(payload, null, 2));
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-4xl w-full bg-white p-8 rounded-2xl shadow-lg">
-        <h1 className="text-2xl font-bold text-gray-800 text-center mb-4">
-          Vendor Pricing Matrix
-        </h1>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Vendor Name */}
+      <div className="max-w-4xl w-full bg-white p-8 rounded-2xl shadow-lg space-y-6">
+        <h1 className="text-2xl font-bold text-gray-800 text-center">Vendor Pricing Matrix</h1>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Vendor</label>
+            <label className="block text-sm font-medium text-gray-700">Company (User ID)</label>
             <input
               type="text"
-              value={vendor}
-              onChange={e => setVendor(e.target.value)}
-              placeholder="Enter vendor name"
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+              value={companyName}
+              onChange={e => setCompanyName(e.target.value)}
+              className="mt-1 w-full border-gray-300 rounded-lg"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Transporter ID</label>
+            <input
+              type="text"
+              value={transporterId}
+              onChange={e => setTransporterId(e.target.value)}
+              className="mt-1 w-full border-gray-300 rounded-lg"
               required
             />
           </div>
 
-          {/* Additional Charges */}
+          {/* PriceRate inputs (docket, fuel, nested charges, etc.) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {Object.entries(charges).map(([key, value]) => (
-              <div key={key}>
-                <label className="block text-sm font-medium text-gray-700 capitalize">{key}</label>
-                <input
-                  type="number"
-                  name={key}
-                  value={value}
-                  onChange={handleChargeChange}
-                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-            ))}
+            <input name="minWeight" placeholder="Min Weight" type="number" value={priceRate.minWeight} onChange={handleRateChange} className="border rounded p-2" />
+            <input name="docketCharges" placeholder="Docket Charges" type="number" value={priceRate.docketCharges} onChange={handleRateChange} className="border rounded p-2" />
+            <input name="fuel" placeholder="Fuel" type="number" value={priceRate.fuel} onChange={handleRateChange} className="border rounded p-2" />
+
+            {/* Example nested fields; repeat for each nested charge */}
+            <input name="rovVariable" placeholder="ROV Variable" type="number" value={priceRate.rovVariable} onChange={handleRateChange} className="border rounded p-2" />
+            <input name="rovFixed" placeholder="ROV Fixed" type="number" value={priceRate.rovFixed} onChange={handleRateChange} className="border rounded p-2" />
+
+            {/* ...and so on up to miscellanousCharges */}
           </div>
 
-          {/* 14x14 Zone Matrix */}
+          {/* Zone matrix */}
           <div className="overflow-auto">
-            <table className="min-w-full table-fixed border-collapse">
+            <table className="min-w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="border px-2 py-1 bg-gray-100 text-sm">zone</th>
-                  {zoneLabels.map(label => (
-                    <th key={label} className="border px-2 py-1 bg-gray-100 text-sm">{label}</th>
-                  ))}
+                  <th className="border px-2 py-1">From/To</th>
+                  {zoneLabels.map(z => <th key={z} className="border px-2 py-1">{z}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {matrix.map((row, i) => (
                   <tr key={i}>
-                    <td className="border px-2 py-1 bg-gray-100 text-sm">{zoneLabels[i]}</td>
+                    <td className="border px-2 py-1 bg-gray-50">{zoneLabels[i]}</td>
                     {row.map((cell, j) => (
                       <td key={j} className="border px-1 py-1">
                         <input
                           type="number"
                           value={cell}
                           onChange={e => handleMatrixChange(i, j, e.target.value)}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                          className="w-full p-1 text-sm border rounded"
                         />
                       </td>
                     ))}
@@ -122,13 +194,7 @@ const Onboarding: React.FC = () => {
             </table>
           </div>
 
-          {/* Submit */}
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition"
-          >
-            Export JSON
-          </button>
+          <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg">Generate JSON</button>
         </form>
       </div>
     </div>

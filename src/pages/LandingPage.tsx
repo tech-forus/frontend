@@ -23,10 +23,6 @@ import DTDCLogo from "../assets/logos/dtdc.svg";
 import FedExLogo from "../assets/logos/fedex.svg";
 
 const LandingPage: React.FC = () => {
-  // Original Quick-Compare state (unused now, but kept in case)
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
-  const [weight, setWeight] = useState("");
 
   // --- DEMO STATE & LOGIC (unchanged from before) ---
   const [showDemo, setShowDemo] = useState(false);
@@ -63,12 +59,6 @@ const LandingPage: React.FC = () => {
     setDemoCost(cost);
   };
   // --- DEMO END ---
-
-  // (Keep handleQuickCompare if you ever want the old form back)
-  const handleQuickCompare = (e: FormEvent) => {
-    e.preventDefault();
-    alert(`Comparing: From ${origin} to ${destination}, Weight: ${weight}kg`);
-  };
 
   const StepCard: React.FC<{
     stepNumber: string;
@@ -144,7 +134,7 @@ const LandingPage: React.FC = () => {
 
             {/* 2) Get Started on the right (yellow, with arrow) */}
             <a
-              href="/signup"
+              href="/signin"
               className="bg-yellow-400 text-black px-6 py-3 rounded-md hover:bg-yellow-500 transition-colors duration-200 font-medium inline-flex items-center"
             >
               Get Started
