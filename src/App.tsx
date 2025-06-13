@@ -21,8 +21,9 @@ import AboutUsPage from './pages/AboutUsPage';
 import Upload from './pages/Upload';
 import Onboarding from './pages/Onboarding';
 import ExcelUploader from './pages/excel';
-
-// PrivateRoute Component
+import AddTransporter from './pages/AddTransporter';
+import AddVendors from './pages/AddVendor';
+// PrivateRoute Compent
 interface PrivateRouteProps {
   children: React.ReactNode;
 }
@@ -109,7 +110,8 @@ function App() {
           <Route path='/contact' element={<MainLayout><ContactUsPage /></MainLayout>} />
           <Route path='/about' element={<MainLayout><AboutUsPage /></MainLayout>} />
           <Route path='/upload' element={<MainLayout><Upload /></MainLayout>} />
-          
+          <Route path='/addtransporter' element={<MainLayout><AddTransporter /></MainLayout>} />
+          <Route path='/addvendors' element={<MainLayout><AddVendors /></MainLayout>} />
           {/* --- CATCH-ALL 404 ROUTE (MUST BE LAST) --- */}
           <Route 
             path="*" 
