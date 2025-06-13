@@ -20,6 +20,7 @@ import ContactUsPage from './pages/ContactUsPage';
 import AboutUsPage from './pages/AboutUsPage';
 import Upload from './pages/Upload';
 import Onboarding from './pages/Onboarding';
+import ExcelUploader from './pages/excel';
 
 // PrivateRoute Component
 interface PrivateRouteProps {
@@ -104,6 +105,7 @@ function App() {
           <Route path="/signup" element={<MainLayout><PublicRoute><SignUpPage /></PublicRoute></MainLayout>} />
           <Route path="/forgot-password" element={<MainLayout><PublicRoute><ForgotPasswordPage /></PublicRoute></MainLayout>} />
           <Route path='/' element={<LandingPage />} />
+          <Route path="/excel" element={<MainLayout><ExcelUploader /></MainLayout>} />
           <Route path='/contact' element={<MainLayout><ContactUsPage /></MainLayout>} />
           <Route path='/about' element={<MainLayout><AboutUsPage /></MainLayout>} />
           <Route path='/upload' element={<MainLayout><Upload /></MainLayout>} />
