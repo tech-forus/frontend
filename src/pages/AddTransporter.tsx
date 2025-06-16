@@ -4,7 +4,7 @@ import guidlines from '../assets/guidlines.jpg';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-export default function TransporterUploader() {
+export default function AddTransporter() {
   const [transporter, setTransporter] = useState('');
   const [zoneCount, setZoneCount] = useState<number>(0);
   const [zones, setZones] = useState<string[]>([]);
