@@ -4,7 +4,7 @@ import guidlines from '../assets/guidlines.jpg';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-export default function TransporterUploader() {
+export default function AddTransporter() {
   const [transporter, setTransporter] = useState('');
   const [zoneCount, setZoneCount] = useState<number>(0);
   const [zones, setZones] = useState<string[]>([]);
@@ -49,9 +49,11 @@ export default function TransporterUploader() {
     formData.append('transporter', transporter);
     formData.append('zones', JSON.stringify(zones));
     formData.append('sheet', file);
+    sessionStorage.setItem('companyName', transporter);
+    sessionStorage.setItem('priceRate', JSON.stringify(zones));
 
     try {
-      const res = await fetch('http://localhost:8000/api/admin/addtransporter', {
+      const res = await fetch('http://localhost:85000/api/admin/addtransporter', {
         method: 'POST',
         body: formData
       });

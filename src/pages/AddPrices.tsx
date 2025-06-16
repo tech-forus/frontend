@@ -29,7 +29,7 @@ interface PriceRate {
 
 type ZoneRatesMatrix = number[][]
 
-export default function PriceForm() {
+export default function AddPrice() {
   const [priceRate, setPriceRate] = useState<PriceRate>({
     minWeight: 0,
     docketCharges: 0,
