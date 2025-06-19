@@ -1,7 +1,7 @@
 // src/pages/SignUpPage.tsx
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { UserPlus, PlusCircle, Trash2 } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import axios from "axios";
 import toast from "react-hot-toast";
 
@@ -18,9 +18,6 @@ const SignUpPage: React.FC = () => {
   const [address, setAddress] = useState("");
   const [customerState, setCustomerState] = useState("");
   const [pincode, setPincode] = useState("");
-  const [pickUpAddresses, setPickUpAddresses] = useState([
-    { address: "", state: "", pincode: "" },
-  ]);
   const [monthlyOrders, setMonthlyOrders] = useState("");
   const [businessType, setBusinessType] = useState("");
   const [phoneOtp, setphoneOtp] = useState("");
@@ -35,31 +32,6 @@ const SignUpPage: React.FC = () => {
 
   const baseInputClasses =
     "appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm disabled:bg-gray-100";
-
-  const handleAddPickUpAddress = () => {
-    setPickUpAddresses([
-      ...pickUpAddresses,
-      { address: "", state: "", pincode: "" },
-    ]);
-  };
-
-  const handlePickUpAddressChange = (
-    index: number,
-    field: keyof (typeof pickUpAddresses)[0],
-    value: string
-  ) => {
-    const updated = [...pickUpAddresses];
-    updated[index][field] = value;
-    setPickUpAddresses(updated);
-  };
-
-  const handleRemovePickUpAddress = (index: number) => {
-    const updated = [...pickUpAddresses];
-    updated.splice(index, 1);
-    setPickUpAddresses(
-      updated.length ? updated : [{ address: "", state: "", pincode: "" }]
-    );
-  };
 
   const handleContactNumberChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -103,20 +75,6 @@ const SignUpPage: React.FC = () => {
       return;
     }
 
-    const filledPickUpAddresses = pickUpAddresses
-      .map((p) => ({
-        address: p.address.trim(),
-        state: p.state.trim(),
-        pincode: parseInt(p.pincode.trim(), 10),
-      }))
-      .filter((p) => p.address && p.state && !isNaN(p.pincode));
-
-    if (filledPickUpAddresses.length === 0) {
-      setError("At least one valid pickup address is required.");
-      toast.error("At least one valid pickup address is required.");
-      setIsLoading(false);
-      return;
-    }
 
     try {
       await axios.post("http://localhost:8000/api/auth/signup/initiate", {
@@ -132,13 +90,6 @@ const SignUpPage: React.FC = () => {
         address: address,
         state: customerState,
         pincode: parsedPincode,
-        pickupAddress: pickUpAddresses
-          .map((p) => ({
-            address: p.address.trim(),
-            state: p.state.trim(),
-            pincode: parseInt(p.pincode.trim(), 10),
-          }))
-          .filter((p) => p.address && p.state && !isNaN(p.pincode)),
       });
       toast.success("OTP sent successfully!");
       setOtpSent(true);
@@ -360,78 +311,6 @@ const SignUpPage: React.FC = () => {
               value={pincode}
               onChange={(e) => setPincode(e.target.value)}
             />
-          </div>
-
-          {/* Pickup Addresses */}
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
-              Pickup Addresses
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pickUpAddresses.map((pickup, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center"
-                >
-                  <input
-                    type="text"
-                    placeholder="Address"
-                    value={pickup.address}
-                    onChange={(e) =>
-                      handlePickUpAddressChange(
-                        index,
-                        "address",
-                        e.target.value
-                      )
-                    }
-                    className={`${baseInputClasses} rounded-md`}
-                    disabled={isLoading}
-                  />
-                  <input
-                    type="text"
-                    placeholder="State"
-                    value={pickup.state}
-                    onChange={(e) =>
-                      handlePickUpAddressChange(index, "state", e.target.value)
-                    }
-                    className={`${baseInputClasses} rounded-md`}
-                    disabled={isLoading}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Pincode"
-                    value={pickup.pincode}
-                    onChange={(e) =>
-                      handlePickUpAddressChange(
-                        index,
-                        "pincode",
-                        e.target.value
-                      )
-                    }
-                    className={`${baseInputClasses} rounded-md`}
-                    disabled={isLoading}
-                  />
-                  {pickUpAddresses.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePickUpAddress(index)}
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="text-red-500" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={handleAddPickUpAddress}
-              disabled={isLoading}
-              className="mt-2 w-full flex items-center justify-center px-4 py-2 border border-dashed border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <PlusCircle className="mr-2 h-5 w-5 text-green-500" />
-              Add Another Pickup Address
-            </button>
           </div>
 
           {error && (

@@ -23,6 +23,7 @@ import Onboarding from './pages/Onboarding';
 import ExcelUploader from './pages/excel';
 import AddTransporter from './pages/AddTransporter';
 import AddPrice from './pages/AddPrices';
+import PricingPage from './pages/PricingPage';
 
 // PrivateRoute Component
 interface PrivateRouteProps {
@@ -113,6 +114,7 @@ function App() {
           <Route path='/upload' element={<MainLayout><Upload /></MainLayout>} />
           <Route path='/addtransporter' element={<MainLayout><AddTransporter /></MainLayout> }/>
           <Route path='/addprice' element={<MainLayout><AddPrice /></MainLayout> }/>
+          <Route path='/pricing' element={<MainLayout><PricingPage /></MainLayout>} />
           
           {/* --- CATCH-ALL 404 ROUTE (MUST BE LAST) --- */}
           <Route 

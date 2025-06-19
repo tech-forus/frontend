@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../hooks/useAuth";
 import {
   Calculator as CalculatorIcon,
   Navigation,
@@ -11,6 +12,8 @@ import {
   DollarSign,
 } from "lucide-react";
 import axios from "axios";
+import Cookies from "js-cookie";
+import { Link } from "react-router-dom";
 
 
 type VendorQuote = {
@@ -19,16 +22,17 @@ type VendorQuote = {
   estimatedDelivery: any;
   companyName: string;
   price: any;
-  vendorName: string;
+  transporterName: string;
   deliveryTime: string;
   chargeableWeight: number;
-  totalCost: number;
+  totalCharges: number;
   logoUrl?: string;
   isBestValue?: boolean;
 };
 
 
 const CalculatorPage: React.FC = () => {
+  const { user } = useAuth();
   const [isExpressShipment, setIsExpressShipment] = useState(false);
   const [isFragileShipment, setIsFragileShipment] = useState(false);
 
@@ -47,6 +51,9 @@ const CalculatorPage: React.FC = () => {
   const [width, setwidth] = useState(0);
   const [height, setheight] = useState(0);
   const [weightperbox, setweightperbox] = useState(0);
+  const [hiddendata, sethiddendata] = useState<VendorQuote[] | null>(null);
+
+  const token = Cookies.get('authToken');
 
 
   // Main quote calculation
@@ -70,7 +77,8 @@ const CalculatorPage: React.FC = () => {
       const response = await axios.post(
         "http://localhost:8000/api/transporter/calculate",
         {
-          //customerId: (user as any).customer.id,
+          customerID: (user as any).customer._id,
+          userogpincode: (user as any).customer.pincode,
           modeoftransport: modeOfTransport,
           fromPincode: fromPincode,
           toPincode: toPincode,
@@ -80,12 +88,17 @@ const CalculatorPage: React.FC = () => {
           width: width,
           height: height,
           weight: weightperbox,
+        }, {
+          headers: {
+            Authorization : `Bearer ${token}`
+          }
         }
       );
 
       if (response) {
         console.log(response.data);
-        setData(response.data.result);
+        setData(response.data.tiedUpResult);
+        sethiddendata(response.data.companyResult);
       }
     } catch (e) {
       setError("Failed to calculate quotes or send data. Please try again.");
@@ -443,7 +456,7 @@ const CalculatorPage: React.FC = () => {
                     <div className="flex items-center gap-4 mb-3">
                       <div>
                         <h3 className="font-bold text-lg">
-                          {item.transporterData.companyName}
+                          {item?.transporterName}
                         </h3>
                       </div>
                     </div>
@@ -473,7 +486,7 @@ const CalculatorPage: React.FC = () => {
                           <span>Total Cost</span>
                         </div>
                         <p className="font-semibold text-blue-700">
-                          ₹{item.totalPrice}
+                          ₹{item.totalCharges}
                         </p>
                       </div>
                     </div>
@@ -495,10 +508,78 @@ const CalculatorPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
+
+                
             </div>
-          </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {hiddendata &&
+                hiddendata
+                  .sort((a, b) => a.price - b.price)
+                  .map((item, index) => (
+                    <div
+                      key={index}
+                      className="rounded-lg border p-4 transition-all border-green-200 bg-green-50"
+                    >
+                      {/* Everything blurred except price */}
+                      <div>
+                        <div className="flex items-center gap-4 mb-3">
+                          <h3 className="font-bold text-lg">{item.transporterName === undefined ? <div style={{filter: "blur(5px)", userSelect: "none" }}>XXXXXXXX</div> : <div>item.transporterName</div>}</h3>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div>
+                            <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+                              <CalendarClock size={14} />
+                              <span>Delivery Time</span>
+                            </div>
+                            <p className="font-semibold">7 Days</p>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+                              <Weight size={14} />
+                              <span>Chargeable</span>
+                            </div>
+                            <p className="font-semibold">{item.chargeableWeight === undefined ? <div style={{filter: "blur(5px)", userSelect: "none" }}>XXXXXXXX</div> : <div>item.transporterName</div>} kg</p>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-1 text-sm text-gray-600 mb-1">
+                              <DollarSign size={14} />
+                              <span>Total Cost</span>
+                            </div>
+                            <p className="font-semibold text-blue-700">₹{item.totalCharges}</p>
+                          </div>
+                        </div>
+
+
+                        <div className="flex justify-between mt-4">
+                          {item.chargeableWeight === undefined ? <>
+                            <Link
+                              to = "/pricing"
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm flex items-center gap-1 transition-colors"
+                            >
+                              Buy Now <ArrowRight size={16} />
+                            </Link>
+                          </> : <>
+                            <button
+                              type="button"
+                              className="text-sm text-gray-600 flex items-center gap-1 hover:text-gray-800 transition-colors"
+                            >
+                              Show Bifurcation
+                            </button>
+                          </>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+             </div>
+
+            </div>
         </div>
       )}
+
+      
     </div>
   );
 };

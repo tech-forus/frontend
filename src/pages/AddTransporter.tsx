@@ -50,10 +50,10 @@ export default function AddTransporter() {
     formData.append('zones', JSON.stringify(zones));
     formData.append('sheet', file);
     sessionStorage.setItem('companyName', transporter);
-    sessionStorage.setItem('priceRate', JSON.stringify(zones));
+    sessionStorage.setItem('zones', JSON.stringify(zones));
 
     try {
-      const res = await fetch('http://localhost:85000/api/admin/addtransporter', {
+      const res = await fetch('http://localhost:8000/api/admin/addtransporter', {
         method: 'POST',
         body: formData
       });
@@ -90,7 +90,7 @@ export default function AddTransporter() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-lg">
+    <div className="mx-auto p-6 bg-white shadow-lg rounded-lg">
       <h2 className="text-2xl font-bold mb-6">Transporter Serviceability</h2>
       <div className="space-y-4">
         {/* Transporter Name */}

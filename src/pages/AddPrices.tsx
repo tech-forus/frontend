@@ -1,6 +1,8 @@
 // src/pages/admin/AddPrices.tsx
-import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
+import {useNavigate} from 'react-router-dom';
 
 interface VariableFixed { variable: number; fixed: number; }
 
@@ -25,10 +27,10 @@ type PriceRate = {
 };
 
 export default function AddPrices() {
+  const navigate = useNavigate();
   const defaultZones = ['N1','N2','N3','C1','W1','W2','S1','S2','E1','NE1','NE2'];
 
   const [transporterName, setTransporterName] = useState('');
-  const [zoneInput, setZoneInput] = useState('');
   const [zoneLabels, setZoneLabels] = useState<string[]>([]);
   const [zoneRates, setZoneRates] = useState<number[][]>([]);
   const [priceRate, setPriceRate] = useState<PriceRate>({
@@ -53,18 +55,28 @@ export default function AddPrices() {
 
   const inputClass = 'w-full border px-3 py-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('addPricesData') || '{}');
-      if (saved.transporterName) setTransporterName(saved.transporterName);
-      if (Array.isArray(saved.zoneLabels)) setZoneLabels(saved.zoneLabels);
-      if (Array.isArray(saved.zoneRates)) setZoneRates(saved.zoneRates);
-      if (saved.priceRate) setPriceRate(saved.priceRate);
-      if (saved.manualFrom) setManualFrom(saved.manualFrom);
-      if (saved.manualTo) setManualTo(saved.manualTo);
-      if (typeof saved.manualPrice === 'number') setManualPrice(saved.manualPrice);
-      if (typeof saved.showManual === 'boolean') setShowManual(saved.showManual);
-    } catch {}
+    useEffect(() => {
+    const savedName = sessionStorage.getItem('companyName');
+    const savedZones = sessionStorage.getItem('zones');
+
+    if (savedName) {
+      setTransporterName(savedName);
+    }
+
+    if (savedZones) {
+      try {
+        const arr = JSON.parse(savedZones);
+        if (Array.isArray(arr)) {
+          setZoneLabels(arr);
+
+          // build a [n x n] zero-matrix for the table
+          const matrix = arr.map(_ => arr.map(__ => 0));
+          setZoneRates(matrix);
+        }
+      } catch {
+        console.warn('Invalid JSON in sessionStorage.zones');
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -73,22 +85,6 @@ export default function AddPrices() {
 
   const rebuildMatrix = (labels: string[]) => {
     setZoneRates(prev => labels.map((_, i) => labels.map((__, j) => prev[i]?.[j] ?? 0)));
-  };
-
-  const handleAddZone = () => {
-    const z = zoneInput.trim();
-    if (z && !zoneLabels.includes(z)) {
-      const labels = [...zoneLabels, z];
-      setZoneLabels(labels);
-      rebuildMatrix(labels);
-    }
-    setZoneInput('');
-  };
-
-  const handleRemoveZone = (z: string) => {
-    const labels = zoneLabels.filter(l => l !== z);
-    setZoneLabels(labels);
-    rebuildMatrix(labels);
   };
 
   const handleRateChange = (section: keyof PriceRate, field: keyof VariableFixed | null, e: ChangeEvent<HTMLInputElement>) => {
@@ -124,7 +120,7 @@ export default function AddPrices() {
     zoneLabels.forEach((from, i) => { zr[from] = {}; zoneLabels.forEach((to, j) => zr[from][to] = zoneRates[i]?.[j]||0); });
     const payload = { companyName: transporterName, priceRate, zoneRates: zr };
     console.log('Submitting payload:', payload);
-    try { setLoading(true); await axios.post('/api/prices', payload); alert('✅ Saved'); }
+    try { setLoading(true); await axios.post('http://localhost:8000/api/admin/addprice', payload); toast.success('✅ Saved'); navigate("/compare")}
     catch(err:any){ setError(err.response?.data?.message||'Save failed'); }
     finally{ setLoading(false); }
   };
@@ -135,27 +131,13 @@ export default function AddPrices() {
         <div className="bg-indigo-600 p-6"><h1 className="text-2xl font-semibold text-white">Add Price Configuration</h1></div>
         <form className="p-8 space-y-6" onSubmit={handleSubmit}>
 
-          {/* Transporter & Zones */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block mb-2 font-medium">Transporter Name</label>
-              <input type="text" className={inputClass} value={transporterName} onChange={e => setTransporterName(e.target.value)} placeholder="Enter transporter name" />
-            </div>
-            <div>
-              <label className="block mb-2 font-medium">Zones</label>
-              <div className="flex gap-2">
-                <input type="text" className={inputClass} value={zoneInput} onChange={e => setZoneInput(e.target.value)} placeholder="Add zone" />
-                <button type="button" className="px-4 py-2 bg-green-600 text-white rounded" onClick={handleAddZone}>Add</button>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {zoneLabels.map(z => (
-                  <span key={z} className="bg-gray-200 px-3 py-1 rounded-full flex items-center">
-                    {z}<button type="button" className="ml-2 text-red-500" onClick={() => handleRemoveZone(z)}>×</button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* Transporter Name */}
+          <input
+            type="text"
+            className={inputClass}
+            value={transporterName}
+            disabled        // ← user can’t change this now
+          />
 
           {/* Basic Rates */}
           <div><h2 className="font-medium mb-2">Basic Rates</h2>
