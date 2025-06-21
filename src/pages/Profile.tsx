@@ -121,8 +121,8 @@ const ProfilePage: React.FC = () => {
             Personal Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <ProfileField label="First Name" value={nameParts[0]} />
-            <ProfileField label="Last Name" value={nameParts.length > 1 ? nameParts.slice(1).join(' ') : '-'} />
+            <ProfileField label="First Name" value={customer.firstName} />
+            <ProfileField label="Last Name" value={customer.lastName} />
           </div>
         </section>
 
@@ -132,8 +132,8 @@ const ProfilePage: React.FC = () => {
             Contact Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <ProfileField label="Email Address" value={customer.mailId} />
-            <ProfileField label="Phone Number" value={customer.contactNumber} />
+            <ProfileField label="Email Address" value={customer.email} />
+            <ProfileField label="Phone Number" value={customer.phone} />
           </div>
         </section>
 

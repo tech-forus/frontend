@@ -18,12 +18,10 @@ import LandingPage from './pages/LandingPage';
 import Profile from './pages/Profile';
 import ContactUsPage from './pages/ContactUsPage';
 import AboutUsPage from './pages/AboutUsPage';
-import Upload from './pages/Upload';
-import Onboarding from './pages/Onboarding';
-import ExcelUploader from './pages/excel';
 import AddTransporter from './pages/AddTransporter';
 import AddPrice from './pages/AddPrices';
 import PricingPage from './pages/PricingPage';
+import AddVendor from './pages/AddVendor';
 
 // PrivateRoute Component
 interface PrivateRouteProps {
@@ -53,10 +51,10 @@ function App() {
         <Routes>
           {/* --- PROTECTED ROUTES (require login) --- */}
           <Route 
-            path="/onboarding" 
+            path="/addvendor" 
             element={
               <MainLayout>
-                  <Onboarding />
+                  <AddVendor />
               </MainLayout>
             } 
           />
@@ -108,13 +106,14 @@ function App() {
           <Route path="/signup" element={<MainLayout><PublicRoute><SignUpPage /></PublicRoute></MainLayout>} />
           <Route path="/forgot-password" element={<MainLayout><PublicRoute><ForgotPasswordPage /></PublicRoute></MainLayout>} />
           <Route path='/' element={<LandingPage />} />
-          <Route path="/excel" element={<MainLayout><ExcelUploader /></MainLayout>} />
           <Route path='/contact' element={<MainLayout><ContactUsPage /></MainLayout>} />
           <Route path='/about' element={<MainLayout><AboutUsPage /></MainLayout>} />
-          <Route path='/upload' element={<MainLayout><Upload /></MainLayout>} />
-          <Route path='/addtransporter' element={<MainLayout><AddTransporter /></MainLayout> }/>
-          <Route path='/addprice' element={<MainLayout><AddPrice /></MainLayout> }/>
-          <Route path='/pricing' element={<MainLayout><PricingPage /></MainLayout>} />
+
+
+          <Route path='/addtransporter' element={<MainLayout><PrivateRoute><AddTransporter /></PrivateRoute></MainLayout> }/>
+          <Route path='/addprice' element={<MainLayout><PrivateRoute><AddPrice /></PrivateRoute></MainLayout> }/>
+          
+          <Route path='/pricing' element={<MainLayout><PrivateRoute><PricingPage /></PrivateRoute></MainLayout>} />
           
           {/* --- CATCH-ALL 404 ROUTE (MUST BE LAST) --- */}
           <Route 
