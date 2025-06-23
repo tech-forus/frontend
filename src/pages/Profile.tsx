@@ -1,226 +1,173 @@
-// src/pages/ProfilePage.tsx
 import React, { useState, FormEvent } from 'react';
-import { UserCircle, LockKeyhole, Save } from 'lucide-react';
+import { User, Lock, Save, Building, Phone, Mail, Hash, MapPin, Loader2, Coins } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import axios from 'axios'; // Ensure axios is imported if not already globally available
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
 
-interface PasswordFieldsType {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
+// --- STYLED HELPER COMPONENTS ---
 
+const Card = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <div className={`bg-white rounded-2xl shadow-lg border border-slate-200/80 p-6 sm:p-8 ${className}`}>
+        {children}
+    </div>
+);
+
+const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }) => (
+    <div className="flex items-center mb-6">
+        <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-blue-600 bg-blue-100 rounded-lg">
+            {icon}
+        </div>
+        <h2 className="ml-4 text-xl font-bold text-slate-800">{title}</h2>
+    </div>
+);
+
+const ProfileField = ({ label, value }: { label: string; value: string | number | undefined | null }) => (
+    <div>
+        <p className="block text-sm font-medium text-slate-500">{label}</p>
+        <p className="text-md font-semibold text-slate-800">{value || <span className='font-normal text-slate-400'>Not Provided</span>}</p>
+    </div>
+);
+
+
+const PasswordInputField = ({ id, label, value, onChange, disabled }: { id: string; label: string, value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, disabled: boolean }) => (
+    <div>
+        <label htmlFor={id} className="block text-sm font-medium text-slate-600 mb-1.5">{label}</label>
+        <div className="relative">
+            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            <input
+                id={id} name={id} type="password" required value={value} onChange={onChange} disabled={disabled}
+                placeholder="••••••••"
+                className="w-full pl-11 pr-3 py-2.5 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:bg-slate-100"
+            />
+        </div>
+    </div>
+);
+
+// --- MAIN COMPONENT ---
 const ProfilePage: React.FC = () => {
-  const [passwordFields, setPasswordFields] = useState<PasswordFieldsType>({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-
+  const [passwordFields, setPasswordFields] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [messageType, setMessageType] = useState<'success' | 'error' | null>(null);
-
-  const { user } = useAuth(); // Assuming useAuth provides the user object
-
-  // customer object derived from user, with a fallback to an empty object
+  const { user } = useAuth();
+  
   const customer = (user as any)?.customer || {};
-  const nameParts = (customer.name || '').split(' ');
+  const userInitial = customer.firstName ? customer.firstName.charAt(0).toUpperCase() : '?';
 
   const handlePasswordInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setPasswordFields(prev => ({ ...prev, [name]: value }));
+    setPasswordFields(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handlePasswordSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setMessage(null);
-    setMessageType(null);
-
-    // Frontend Validations
-    if (passwordFields.newPassword !== passwordFields.confirmPassword) {
-      setMessage('New password and confirm password do not match.');
-      setMessageType('error');
-      setIsSaving(false);
-      return;
-    }
-    if (passwordFields.newPassword.length < 8) {
-      setMessage('New password must be at least 8 characters long.');
-      setMessageType('error');
-      setIsSaving(false);
-      return;
-    }
-
-    // Ensure mailId is available from the customer object
-    if (!customer.mailId) {
-      setMessage('User email could not be determined. Cannot change password.');
-      setMessageType('error');
-      setIsSaving(false);
-      return;
-    }
+    e.preventDefault(); setIsSaving(true);
+    if (passwordFields.newPassword !== passwordFields.confirmPassword) { toast.error('New passwords do not match.'); setIsSaving(false); return; }
+    if (passwordFields.newPassword.length < 8) { toast.error('New password must be at least 8 characters long.'); setIsSaving(false); return; }
 
     try {
-      const payload = {
-        mailId: customer.mailId, // Use mailId from the customer object
-        password: passwordFields.currentPassword,
-        newpassword: passwordFields.newPassword,
-      };
-
-      const response = await axios.post(
-        "http://localhost:8000/api/auth/changepassword", 
-        payload
-      );
-
-      // Assuming API responds with 2xx status and a message in response.data
-      setMessage(response.data?.message || 'Password changed successfully!');
-      setMessageType('success');
-      setPasswordFields({ // Reset fields on success
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-        
+      const response = await axios.post("http://localhost:8000/api/auth/changepassword", {
+          email: customer.email, password: passwordFields.currentPassword, newpassword: passwordFields.newPassword,
       });
-
+      toast.success(response.data?.message || 'Password changed successfully!');
+      setPasswordFields({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
-      console.error("Password change error:", error);
-      let errorMessage = 'An unexpected error occurred while changing password.';
-      if (axios.isAxiosError(error) && error.response) {
-        // Backend responded with an error status code (4xx, 5xx)
-        // Try to use message from backend response, or fallback to Axios error message or generic one
-        errorMessage = error.response.data?.message || error.message || 'Failed to change password due to a server error.';
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      setMessage(errorMessage);
-      setMessageType('error');
+      const axiosError = error as any;
+      toast.error(axiosError.response?.data?.message || 'Failed to change password.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const ProfileField: React.FC<{ label: string; value: string | undefined | null }> = ({ label, value }) => (
-    <div>
-      <p className="block text-sm font-medium text-gray-500 mb-0.5">{label}</p>
-      <p className="text-md text-gray-800">{value || '-'}</p>
-    </div>
-  );
-
   return (
-    <div className="container mx-auto p-4 font-sans">
-      {/* Header */}
-      <div className="flex items-center mb-6 border-b pb-4">
-        <UserCircle size={36} className="mr-3 text-blue-600" />
-        <h1 className="text-3xl font-semibold text-gray-800">User Profile</h1>
-      </div>
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        {/* Page Header */}
+        <motion.div initial={{opacity:0, y:-20}} animate={{opacity:1, y:0}} transition={{duration:0.5}} className="mb-8">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">My Profile</h1>
+          <p className="mt-2 text-lg text-slate-600">View and manage your account and business details.</p>
+        </motion.div>
 
-      <div className="space-y-8 bg-white p-6 md:p-8 rounded-lg shadow-lg">
-        {/* Personal Info */}
-        <section>
-          <h2 className="text-xl font-semibold text-gray-700 mb-3 border-l-4 border-blue-500 pl-2">
-            Personal Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <ProfileField label="First Name" value={customer.firstName} />
-            <ProfileField label="Last Name" value={customer.lastName} />
-          </div>
-        </section>
+        <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{duration:0.5, delay:0.1}} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Left Column: Profile Details */}
+            <div className="lg:col-span-2 space-y-8">
+                {/* Personal & Contact Info */}
+                <Card>
+                    <SectionHeader icon={<User size={20} />} title="Personal & Contact Information" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+                        <ProfileField label="First Name" value={customer.firstName} />
+                        <ProfileField label="Last Name" value={customer.lastName} />
+                        <ProfileField label="Email Address" value={customer.email} />
+                        <ProfileField label="Phone Number" value={customer.phone} />
+                    </div>
+                </Card>
 
-        {/* Contact Info */}
-        <section>
-          <h2 className="text-xl font-semibold text-gray-700 mb-3 border-l-4 border-blue-500 pl-2">
-            Contact Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <ProfileField label="Email Address" value={customer.email} />
-            <ProfileField label="Phone Number" value={customer.phone} />
-          </div>
-        </section>
-
-        {/* Company Info */}
-        <section>
-          <h2 className="text-xl font-semibold text-gray-700 mb-3 border-l-4 border-blue-500 pl-2">
-            Company Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <ProfileField label="Company Name" value={customer.companyName} />
-            <ProfileField label="GST Number" value={customer.gstNumber} />
-          </div>
-        </section>
-
-        {/* Address Info */}
-        <section>
-          <h2 className="text-xl font-semibold text-gray-700 mb-3 border-l-4 border-blue-500 pl-2">
-            Company Address
-          </h2>
-          <div className="space-y-4">
-            <ProfileField label="Address Line" value={customer.address} />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
-              <ProfileField label="State / Province" value={customer.state} />
-              <ProfileField label="Pincode / ZIP Code" value={customer.pincode} />
-              <ProfileField label="Country" value={"India"} /> {/* Assuming country is fixed */}
+                {/* Company & Address Info */}
+                <Card>
+                    <SectionHeader icon={<Building size={20} />} title="Company & Address" />
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+                           <ProfileField label="Company Name" value={customer.companyName} />
+                           <ProfileField label="GST Number" value={customer.gstNumber} />
+                           <ProfileField label="Business Type" value={customer.businessType} />
+                           <ProfileField label="Average Monthly Orders" value={customer.monthlyOrder} />
+                        </div>
+                        <hr className="border-slate-200" />
+                        <div className="space-y-6">
+                           <ProfileField label="Address" value={customer.address} />
+                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+                             <ProfileField label="State / Province" value={customer.state} />
+                             <ProfileField label="Pincode" value={customer.pincode} />
+                           </div>
+                        </div>
+                    </div>
+                </Card>
+                
+                 {/* Security Settings */}
+                 <Card>
+                    <SectionHeader icon={<Lock size={20} />} title="Security Settings" />
+                    <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                        <p className='text-sm text-slate-500 -mt-2 mb-4'>Change your account password here. Choose a strong, unique password.</p>
+                        <PasswordInputField id="currentPassword" label="Current Password" value={passwordFields.currentPassword} onChange={handlePasswordInputChange} disabled={isSaving}/>
+                        <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                            <PasswordInputField id="newPassword" label="New Password" value={passwordFields.newPassword} onChange={handlePasswordInputChange} disabled={isSaving}/>
+                            <PasswordInputField id="confirmPassword" label="Confirm New Password" value={passwordFields.confirmPassword} onChange={handlePasswordInputChange} disabled={isSaving}/>
+                        </div>
+                        <div className="pt-2 flex justify-end">
+                            <button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow-sm text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+                                <Save size={16} /> {isSaving ? 'Saving...' : 'Save Password'}
+                            </button>
+                        </div>
+                    </form>
+                 </Card>
             </div>
-          </div>
-        </section>
 
-        <hr className="my-6" />
+            {/* Right Column: Sidebar */}
+            <div className="space-y-8">
+                {/* Profile Card */}
+                <Card className='text-center'>
+                    <div className="w-24 h-24 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto font-bold text-4xl mb-4 border-4 border-white shadow-md">
+                        {userInitial}
+                    </div>
+                    <h2 className='text-xl font-bold text-slate-800'>{customer.firstName} {customer.lastName}</h2>
+                    <p className='text-sm text-slate-500'>{customer.email}</p>
+                </Card>
 
-        {/* Password Change */}
-        <section>
-          <div className="flex items-center mb-4">
-            <LockKeyhole size={28} className="mr-3 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-700 border-l-4 border-blue-500 pl-2">
-              Change Password
-            </h2>
-          </div>
-          {/* Form onSubmit now correctly calls the revised handlePasswordSubmit */}
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            {['currentPassword', 'newPassword', 'confirmPassword'].map(field => (
-              <div key={field}>
-                <label
-                  htmlFor={field}
-                  className="block text-sm font-medium text-gray-600 mb-1 capitalize"
-                >
-                  {/* Simple capitalization for display */}
-                  {field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                </label>
-                <input
-                  type="password"
-                  name={field}
-                  id={field}
-                  value={(passwordFields as any)[field]}
-                  onChange={handlePasswordInputChange}
-                  required
-                  minLength={field !== 'currentPassword' ? 8 : undefined}
-                  className="mt-1 block w-full md:w-1/2 rounded-md border border-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
-                />
-              </div>
-            ))}
-
-            {message && (
-              <div
-                className={`mt-4 p-3 rounded-md text-sm ${
-                  messageType === 'success'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
-                }`}
-              >
-                {message}
-              </div>
-            )}
-
-            <div className="pt-2 flex">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md shadow-sm text-base font-medium disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
-              >
-                <Save className="mr-2 h-5 w-5" />
-                {isSaving ? 'Saving...' : 'Change Password'}
-              </button>
+                 {/* Subscription/Tokens Card */}
+                 <Card>
+                     <div className='flex items-center gap-4'>
+                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
+                            <Coins size={24} />
+                        </div>
+                        <div>
+                            <p className='text-sm font-medium text-slate-500'>Available Tokens</p>
+                            <p className='text-3xl font-bold text-slate-800'>{customer.tokenAvailable ?? 0}</p>
+                        </div>
+                     </div>
+                      <p className='text-xs text-slate-400 mt-4'>Tokens are used for generating detailed rate comparisons.</p>
+                      <button className='w-full mt-4 bg-green-500 text-white font-semibold py-2 rounded-lg text-sm hover:bg-green-600 transition'>Buy More Tokens</button>
+                 </Card>
             </div>
-          </form>
-        </section>
+
+        </motion.div>
       </div>
     </div>
   );
