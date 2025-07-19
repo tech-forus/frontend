@@ -77,6 +77,7 @@ const MobileNav = ({ isOpen, closeMenu }: { isOpen: boolean, closeMenu: () => vo
                            )}
                            <MobileNavLink to="/about">About Us</MobileNavLink>
                            <MobileNavLink to="/contact">Contact Us</MobileNavLink>
+                           <MobileNavLink to="/addbid">Add Bid</MobileNavLink>
                            <div className="pt-8">
                             {isAuthenticated ? (<button onClick={handleSignOut} className="w-full text-center px-6 py-3 bg-slate-100 text-slate-700 rounded-lg">Sign Out</button>) : (<Link to="/signin" onClick={closeMenu} className="block w-full text-center px-6 py-3 bg-blue-600 text-white rounded-lg">Sign In</Link>)}
                            </div>
@@ -88,7 +89,7 @@ const MobileNav = ({ isOpen, closeMenu }: { isOpen: boolean, closeMenu: () => vo
     )
 }
 
-// --- MAIN HEADER COMPONENT (Unchanged) ---
+// --- MAIN HEADER COMPONENT (FIXED) ---
 const Header: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -102,6 +103,8 @@ const Header: React.FC = () => {
             <nav className="hidden lg:flex items-center gap-8">
               <NavLink to="/about">About Us</NavLink>
               <NavLink to="/contact">Contact</NavLink>
+              {/* --- FIX IS HERE: Changed MobileNavLink to NavLink --- */}
+              <NavLink to="/addbid">Add Bid</NavLink>
               {isAuthenticated && ( <NavLink to="/addvendor">Add Vendor</NavLink>)}
             </nav>
             <div className="flex items-center gap-4">
