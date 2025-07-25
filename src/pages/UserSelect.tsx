@@ -146,9 +146,10 @@ export default function UserSelect() {
             illustration={<Truck />}
             title="Transporter"
             description="Manage your fleet, access our load board, boost profits."
-            linkTo="/https://peaceful-halva-d8c713.netlify.app"
+            linkTo="https://peaceful-halva-d8c713.netlify.app"  // ✅ fixed
             glowColor="#f59e0b"
           />
+
         </motion.div>
       </motion.div>
     </div>
