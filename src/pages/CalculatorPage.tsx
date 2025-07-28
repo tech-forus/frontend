@@ -508,7 +508,7 @@ const CalculatorPage: React.FC = () => {
             {/* Preset dropdown */}
             <div className="relative text-sm">
               <InputField
-                label="Preset"
+                label="Box Name"
                 id={`preset-${index}`}
                 placeholder="Select preset…"
                 value={openPresetDropdownIndex === index ? searchTerm : ""}
