@@ -481,97 +481,149 @@ const CalculatorPage: React.FC = () => {
           </div>
         </Card>
 
-        <Card>
-          <div className="flex flex-col md:flex-row justify-between md:items-start gap-6 mb-6">
-            <div className="flex-grow">
-              <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center"><Boxes size={22} className="mr-3 text-indigo-500" /> Shipment Details</h2>
-              <p className="text-sm text-slate-500">Enter dimensions and weight, or select a saved preset to auto-fill.</p>
-            </div>
-            
-            {areDimensionsSame && (
-              <div className="w-full md:w-auto md:min-w-[280px] flex-shrink-0">
-                <div className="relative">
-                   <InputField
-                    id="search-box-global"
-                    type="text"
-                    placeholder="Select a preset..."
-                    value={openPresetDropdownIndex === 0 ? searchTerm : ""}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    onFocus={() => { setOpenPresetDropdownIndex(0); setSearchTerm(''); }}
-                    icon={<PackageSearch size={16} />}
-                   />
-                   <AnimatePresence>
-                    {openPresetDropdownIndex === 0 && (
-                      <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-10 w-full mt-2 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
-                        {displayableBoxes.length > 0 ? displayableBoxes.map((box) => (<li key={box._id} onClick={() => handleSelectPresetForBox(0, box)} className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm text-slate-700">{box.name}</li>)) : <li className="px-4 py-3 text-sm text-slate-500 italic">{savedBoxes.length === 0 ? "No presets saved." : "No matches found."}</li>}
-                      </motion.ul>
+<Card>
+  <div className="mb-6">
+    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+      <Boxes size={22} className="text-indigo-500" /> Shipment Details
+    </h2>
+    <p className="text-sm text-slate-500">
+      Enter dimensions and weight, or select a saved preset to auto-fill.
+    </p>
+  </div>
+
+  <div className="space-y-6" ref={presetsContainerRef}>
+    <AnimatePresence>
+      {boxes.map((box, index) => (
+        <motion.div
+          key={box.id}
+          layout
+          initial={{ opacity: 0, y: -20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -50, scale: 0.9 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="p-5 bg-slate-50 border border-slate-200 rounded-xl relative"
+        >
+          {/* Row 1: Preset │ Number of Boxes │ Weight */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {/* Preset dropdown */}
+            <div className="relative text-sm">
+              <InputField
+                label="Preset"
+                id={`preset-${index}`}
+                placeholder="Select preset…"
+                value={openPresetDropdownIndex === index ? searchTerm : ""}
+                onChange={e => setSearchTerm(e.target.value)}
+                onFocus={() => {
+                  setOpenPresetDropdownIndex(index);
+                  setSearchTerm("");
+                }}
+                icon={<PackageSearch size={16} />}
+                className="text-sm"
+              />
+              <AnimatePresence>
+                {openPresetDropdownIndex === index && (
+                  <motion.ul
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg max-h-40 overflow-y-auto bg-white shadow-lg"
+                  >
+                    {displayableBoxes.length > 0 ? (
+                      displayableBoxes.map(preset => (
+                        <li
+                          key={preset._id}
+                          onClick={() => {
+                            handleSelectPresetForBox(index, preset);
+                            setOpenPresetDropdownIndex(null);
+                          }}
+                          className="px-4 py-2 hover:bg-indigo-50 cursor-pointer text-slate-700 text-sm"
+                        >
+                          {preset.name}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="px-4 py-2 text-slate-500 italic text-sm">
+                        {savedBoxes.length === 0
+                          ? "No presets saved."
+                          : "No matches found."}
+                      </li>
                     )}
-                   </AnimatePresence>
-                </div>
-              </div>
-            )}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Number of Boxes */}
+            <InputField
+              label={areDimensionsSame ? "Total Boxes" : "Number of Boxes"}
+              id={`count-${index}`}
+              type="number"
+              min={1}
+              value={box.count ?? ""}
+              onChange={e => updateBox(index, "count", e.target.valueAsNumber)}
+              placeholder="e.g., 10"
+            />
+
+            {/* Weight per Box */}
+            <InputField
+              label="Weight (kg)"
+              id={`weight-${index}`}
+              type="number"
+              min={0}
+              step="0.01"
+              value={box.weight ?? ""}
+              onChange={e => updateBox(index, "weight", e.target.valueAsNumber)}
+              placeholder="e.g., 5.5"
+            />
           </div>
 
-          <div className="space-y-6" ref={presetsContainerRef}>
-            <AnimatePresence>
-              {boxes.map((box, index) => (
-                <motion.div
-                  key={box.id}
-                  ref={(el) => (boxFormRefs.current[index] = el)}
-                  layout
-                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -50, scale: 0.9 }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
-                  className="p-5 border border-slate-200 rounded-xl bg-slate-50/50 relative"
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-lg text-slate-700">{areDimensionsSame ? "Box Details" : `Details for Box Type ${index + 1}`}</h3>
-                    {!areDimensionsSame && boxes.length > 1 && (<button onClick={() => removeBox(index)} className="p-1.5 text-red-500 rounded-full hover:bg-red-100 transition-colors" title="Remove this box type"><Trash2 size={18} /></button>)}
-                  </div>
-                  
-                  {!areDimensionsSame && (
-                    <div className="mb-4 relative">
-                      <InputField
-                        id={`search-box-${index}`}
-                        type="text"
-                        placeholder="Select a preset for this box type..."
-                        value={openPresetDropdownIndex === index ? searchTerm : ""}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        onFocus={() => { setOpenPresetDropdownIndex(index); setSearchTerm(''); }}
-                        icon={<PackageSearch size={16} />}
-                      />
-                      <AnimatePresence>
-                        {openPresetDropdownIndex === index && (
-                          <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-20 w-full mt-2 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
-                            {displayableBoxes.length > 0 ? displayableBoxes.map((preset) => (
-                              <li key={preset._id} onClick={() => handleSelectPresetForBox(index, preset)} className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm text-slate-700">{preset.name}</li>
-                            )) : <li className="px-4 py-3 text-sm text-slate-500 italic">{savedBoxes.length === 0 ? "No presets saved." : "No matches found."}</li>}
-                          </motion.ul>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                    <InputField label={areDimensionsSame ? "Total Number of Boxes" : "Number of these boxes"} id={`count-${index}`} type="number" value={box.count || ""} onChange={(e) => updateBox(index, "count", e.target.valueAsNumber || undefined)} min={1} placeholder="e.g., 10" required/>
-                    <InputField label="Weight per Box (kg)" id={`weight-${index}`} type="number" value={box.weight || ""} onChange={(e) => updateBox(index, "weight", e.target.valueAsNumber || undefined)} min={0} step="0.01" placeholder="e.g., 5.5" required/>
-                    <div className="col-span-1 sm:col-span-2">
-                      <label className="block text-sm font-medium text-slate-600 mb-1.5">Dimensions per Box (cm)</label>
-                      <div className="grid grid-cols-3 gap-3">
-                        <InputField id={`length-${index}`} type="number" value={box.length || ""} onChange={(e) => updateBox(index, "length", e.target.valueAsNumber || undefined)} min={0} placeholder="Length" required/>
-                        <InputField id={`width-${index}`} type="number" value={box.width || ""} onChange={(e) => updateBox(index, "width", e.target.valueAsNumber || undefined)} min={0} placeholder="Width" required/>
-                        <InputField id={`height-${index}`} type="number" value={box.height || ""} onChange={(e) => updateBox(index, "height", e.target.valueAsNumber || undefined)} min={0} placeholder="Height" required/>
-                      </div>
-                    </div>
-                    <div className="col-span-1 sm:col-span-2"><InputField label="Description (Optional)" id={`description-${index}`} type="text" placeholder="e.g., Electronics, Apparel" value={box.description} onChange={(e) => updateBox(index, "description", e.target.value)}/></div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            {!areDimensionsSame && (<div className="border-t border-slate-200 pt-6 text-center"><button onClick={addBoxType} className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 transition-colors"><PlusCircle size={18} />Add Another Box Type</button></div>)}
+          {/* Row 2: Dimensions */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <InputField
+              id={`length-${index}`}
+              placeholder="Length (cm)"
+              type="number"
+              min={0}
+              value={box.length ?? ""}
+              onChange={e => updateBox(index, "length", e.target.valueAsNumber)}
+              required
+            />
+            <InputField
+              id={`width-${index}`}
+              placeholder="Width (cm)"
+              type="number"
+              min={0}
+              value={box.width ?? ""}
+              onChange={e => updateBox(index, "width", e.target.valueAsNumber)}
+              required
+            />
+            <InputField
+              id={`height-${index}`}
+              placeholder="Height (cm)"
+              type="number"
+              min={0}
+              value={box.height ?? ""}
+              onChange={e => updateBox(index, "height", e.target.valueAsNumber)}
+              required
+            />
           </div>
-        </Card>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+
+    {!areDimensionsSame && (
+      <div className="pt-6 border-t border-slate-200 text-center">
+        <button
+          onClick={addBoxType}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
+        >
+          <PlusCircle size={18} /> Add Another Box Type
+        </button>
+      </div>
+    )}
+  </div>
+</Card>
+
 
         {totalBoxes > 0 && (
           <Card>
