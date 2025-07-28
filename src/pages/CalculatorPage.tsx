@@ -35,7 +35,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth"; 
+import { useAuth } from "../hooks/useAuth";
 import axios from "axios";
 import Cookies from "js-cookie";
 import { motion, AnimatePresence } from "framer-motion";
@@ -134,7 +134,6 @@ const InputField = (
   </div>
 );
 
-
 const SortOptionButton = ({
   label,
   icon,
@@ -160,9 +159,9 @@ const SortOptionButton = ({
   </button>
 );
 
-
 const CalculatorPage: React.FC = () => {
   const { user } = useAuth();
+  const customer = (user as any)?.customer; // CHANGE 1: Added customer variable
   const navigate = useNavigate();
   const token = Cookies.get("authToken");
 
@@ -211,6 +210,22 @@ const CalculatorPage: React.FC = () => {
   const [minRating, setMinRating] = useState(0);
   const fineTuneRef = useRef<HTMLDivElement>(null);
 
+  // CHANGE 1: Added useEffect to auto-assign origin pincode
+  useEffect(() => {
+    if (customer?.pincode) {
+      setFromPincode(customer.pincode);
+    }
+  }, [customer?.pincode]);
+
+  // CHANGE 2: Added helper function for pincode validation
+  const handlePincodeChange = (
+    raw: string,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    const digitsOnly = raw.replace(/\D/g, "").slice(0, 6);
+    setter(digitsOnly);
+  };
+  
   // --- BACKEND & DATA FUNCTIONS ---
   const fetchSavedBoxes = async () => {
     if (!user || !token) return;
@@ -219,6 +234,7 @@ const CalculatorPage: React.FC = () => {
         `https://backend-bcxr.onrender.com/api/transporter/getpackinglist?customerId=${(user as any).customer._id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      // CHANGE 3: This logic from your hosted code is correct for displaying names. No changes needed here.
       setSavedBoxes(Array.isArray(response.data.data) ? response.data.data : []);
     } catch (err) {
       console.error("Failed to fetch saved boxes:", err);
@@ -367,9 +383,9 @@ const CalculatorPage: React.FC = () => {
 
     } catch (e: any) {
         if (e.response && e.response.status === 401) {
-             setError("Authentication failed. Please log out and log back in.");
+            setError("Authentication failed. Please log out and log back in.");
         } else {
-             setError(`Failed to get rates. Error: ${e.message}`);
+            setError(`Failed to get rates. Error: ${e.message}`);
         }
     }
 
@@ -415,7 +431,7 @@ const CalculatorPage: React.FC = () => {
                 { name: "Ship", icon: ShipIcon, isAvailable: false },
               ].map((mode) => (
                 <button key={mode.name} onClick={() => (mode.isAvailable ? setModeOfTransport(mode.name as any) : null)} className={`relative group w-full p-4 rounded-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 focus-visible:ring-indigo-500 ${modeOfTransport === mode.name ? "bg-indigo-600 text-white shadow-lg" : mode.isAvailable ? "bg-white text-slate-700 border border-slate-300 hover:border-indigo-500 hover:text-indigo-600" : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed" }`} disabled={!mode.isAvailable} aria-label={mode.isAvailable ? `Select ${mode.name} transport` : `${mode.name} transport (Coming Soon)`}>
-                  <div className={`flex flex-col items-center justify-center gap-2 transition-all duration-300 ${!mode.isAvailable && "group-hover:blur-sm group-hover:opacity-50"}`}>
+                  <div className={`flex flex-col items-center justify-center gap-2 transition-all duration-300 ${!mode.isAvailable && "opacity-50"}`}>
                     <mode.icon size={24} className="mx-auto" />
                     <span className="text-sm font-semibold">{mode.name}</span>
                   </div>
@@ -424,8 +440,29 @@ const CalculatorPage: React.FC = () => {
               ))}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              <InputField label="Origin Pincode" id="fromPincode" value={fromPincode} onChange={(e) => setFromPincode(e.target.value)} placeholder="e.g., 400001" maxLength={6} icon={<MapPin />} />
-              <InputField label="Destination Pincode" id="toPincode" value={toPincode} onChange={(e) => setToPincode(e.target.value)} placeholder="e.g., 110001" maxLength={6} icon={<MapPin />} />
+              {/* CHANGE 2: Updated InputFields for pincode */}
+              <InputField
+                label="Origin Pincode"
+                id="fromPincode"
+                value={fromPincode}
+                placeholder="e.g., 400001"
+                maxLength={6}
+                icon={<MapPin />}
+                inputMode="numeric"
+                pattern="\d{6}"
+                onChange={(e) => handlePincodeChange(e.target.value, setFromPincode)}
+              />
+              <InputField
+                label="Destination Pincode"
+                id="toPincode"
+                value={toPincode}
+                placeholder="e.g., 110001"
+                maxLength={6}
+                icon={<MapPin />}
+                inputMode="numeric"
+                pattern="\d{6}"
+                onChange={(e) => handlePincodeChange(e.target.value, setToPincode)}
+              />
             </div>
           </div>
         </Card>
@@ -453,25 +490,25 @@ const CalculatorPage: React.FC = () => {
             
             {areDimensionsSame && (
               <div className="w-full md:w-auto md:min-w-[280px] flex-shrink-0">
-                  <div className="relative">
-                     <InputField
-                        id="search-box-global"
-                        type="text"
-                        placeholder="Select a preset..."
-                        value={openPresetDropdownIndex === 0 ? searchTerm : ""}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        onFocus={() => { setOpenPresetDropdownIndex(0); setSearchTerm(''); }}
-                        icon={<PackageSearch size={16} />}
-                     />
-                     <AnimatePresence>
-                       {openPresetDropdownIndex === 0 && (
-                         <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-10 w-full mt-2 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
-                           {displayableBoxes.length > 0 ? displayableBoxes.map((box) => (<li key={box._id} onClick={() => handleSelectPresetForBox(0, box)} className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm text-slate-700">{box.name}</li>)) : <li className="px-4 py-3 text-sm text-slate-500 italic">{savedBoxes.length === 0 ? "No presets saved." : "No matches found."}</li>}
-                         </motion.ul>
-                       )}
-                     </AnimatePresence>
-                  </div>
-               </div>
+                <div className="relative">
+                   <InputField
+                    id="search-box-global"
+                    type="text"
+                    placeholder="Select a preset..."
+                    value={openPresetDropdownIndex === 0 ? searchTerm : ""}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => { setOpenPresetDropdownIndex(0); setSearchTerm(''); }}
+                    icon={<PackageSearch size={16} />}
+                   />
+                   <AnimatePresence>
+                    {openPresetDropdownIndex === 0 && (
+                      <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-10 w-full mt-2 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
+                        {displayableBoxes.length > 0 ? displayableBoxes.map((box) => (<li key={box._id} onClick={() => handleSelectPresetForBox(0, box)} className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm text-slate-700">{box.name}</li>)) : <li className="px-4 py-3 text-sm text-slate-500 italic">{savedBoxes.length === 0 ? "No presets saved." : "No matches found."}</li>}
+                      </motion.ul>
+                    )}
+                   </AnimatePresence>
+                </div>
+              </div>
             )}
           </div>
 
@@ -495,24 +532,24 @@ const CalculatorPage: React.FC = () => {
                   
                   {!areDimensionsSame && (
                     <div className="mb-4 relative">
-                        <InputField
-                            id={`search-box-${index}`}
-                            type="text"
-                            placeholder="Select a preset for this box type..."
-                            value={openPresetDropdownIndex === index ? searchTerm : ""}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onFocus={() => { setOpenPresetDropdownIndex(index); setSearchTerm(''); }}
-                            icon={<PackageSearch size={16} />}
-                        />
-                        <AnimatePresence>
+                      <InputField
+                        id={`search-box-${index}`}
+                        type="text"
+                        placeholder="Select a preset for this box type..."
+                        value={openPresetDropdownIndex === index ? searchTerm : ""}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onFocus={() => { setOpenPresetDropdownIndex(index); setSearchTerm(''); }}
+                        icon={<PackageSearch size={16} />}
+                      />
+                      <AnimatePresence>
                         {openPresetDropdownIndex === index && (
-                            <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-20 w-full mt-2 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
+                          <motion.ul initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute z-20 w-full mt-2 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg">
                             {displayableBoxes.length > 0 ? displayableBoxes.map((preset) => (
-                                <li key={preset._id} onClick={() => handleSelectPresetForBox(index, preset)} className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm text-slate-700">{preset.name}</li>
-                                )) : <li className="px-4 py-3 text-sm text-slate-500 italic">{savedBoxes.length === 0 ? "No presets saved." : "No matches found."}</li>}
-                            </motion.ul>
+                              <li key={preset._id} onClick={() => handleSelectPresetForBox(index, preset)} className="px-4 py-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0 text-sm text-slate-700">{preset.name}</li>
+                            )) : <li className="px-4 py-3 text-sm text-slate-500 italic">{savedBoxes.length === 0 ? "No presets saved." : "No matches found."}</li>}
+                          </motion.ul>
                         )}
-                        </AnimatePresence>
+                      </AnimatePresence>
                     </div>
                   )}
 
@@ -589,83 +626,83 @@ const CalculatorPage: React.FC = () => {
           </motion.button>
         </div>
         
-       {(data || hiddendata) && (
+        {(data || hiddendata) && (
         <>
-        <Card>
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center"><Award size={22} className="mr-3 text-indigo-500" /> Sort & Filter Results</h2>
-              <p className="text-sm text-slate-500 mb-6">Quickly organize quotes by price, speed, or vendor rating.</p>
+          <Card>
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center"><Award size={22} className="mr-3 text-indigo-500" /> Sort & Filter Results</h2>
+                <p className="text-sm text-slate-500 mb-6">Quickly organize quotes by price, speed, or vendor rating.</p>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="flex-grow w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <SortOptionButton label="Lowest Price" icon={<IndianRupee size={16} />} selected={sortBy === 'price'} onClick={() => setSortBy('price')}/>
-              <SortOptionButton label="Fastest" icon={<Zap size={16} />} selected={sortBy === 'time'} onClick={() => setSortBy('time')}/>
-              <SortOptionButton label="Highest Rated" icon={<Award size={16} />} selected={sortBy === 'rating'} onClick={() => setSortBy('rating')}/>
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex-grow w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <SortOptionButton label="Lowest Price" icon={<IndianRupee size={16} />} selected={sortBy === 'price'} onClick={() => setSortBy('price')}/>
+                <SortOptionButton label="Fastest" icon={<Zap size={16} />} selected={sortBy === 'time'} onClick={() => setSortBy('time')}/>
+                <SortOptionButton label="Highest Rated" icon={<Award size={16} />} selected={sortBy === 'rating'} onClick={() => setSortBy('rating')}/>
+              </div>
+              <div className="relative w-full sm:w-auto" ref={fineTuneRef}>
+                  <button onClick={() => setIsFineTuneOpen(prev => !prev)} className="w-full px-5 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors border border-slate-300">Fine-Tune Sort</button>
+                  <AnimatePresence>{isFineTuneOpen && <FineTuneModal isOpen={isFineTuneOpen} filters={{ maxPrice, maxTime, minRating }} onFilterChange={{ setMaxPrice, setMaxTime, setMinRating }}/>}</AnimatePresence>
+              </div>
             </div>
-            <div className="relative w-full sm:w-auto" ref={fineTuneRef}>
-                <button onClick={() => setIsFineTuneOpen(prev => !prev)} className="w-full px-5 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors border border-slate-300">Fine-Tune Sort</button>
-                <AnimatePresence>{isFineTuneOpen && <FineTuneModal isOpen={isFineTuneOpen} filters={{ maxPrice, maxTime, minRating }} onFilterChange={{ setMaxPrice, setMaxTime, setMinRating }}/>}</AnimatePresence>
-            </div>
-          </div>
-        </Card>
-        
-        <div id="results" className="space-y-12">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }} className="space-y-8">
-            {(() => {
-                const allQuotes = [...(data || []), ...(hiddendata || [])].filter(q => q.message !== "service not available");
-                const bestValueQuote = allQuotes.length > 0 ? allQuotes.reduce((prev, current) => (prev.totalCharges < current.totalCharges) ? prev : current) : null;
-                const unlockedQuotes = allQuotes.filter(q => !q.isHidden && typeof q.estimatedTime === "number");
-                const fastestQuote = unlockedQuotes.length > 0 ? unlockedQuotes.reduce((prev, current) => (prev.estimatedTime! < current.estimatedTime!) ? prev : current) : null;
-                const processQuotes = (quotes: VendorQuote[] | null) => {
-                  if (!quotes) return [];
-                  const filtered = quotes.filter(q => {
-                    const rating = q.transporterData?.rating ?? 0;
-                    if (q.isHidden) return q.totalCharges <= maxPrice;
-                    return q.totalCharges <= maxPrice && (q.estimatedTime ?? Infinity) <= maxTime && rating >= minRating;
-                  });
-                  return filtered.sort((a, b) => {
-                    switch (sortBy) {
-                      case 'time': if (a.isHidden && !b.isHidden) return 1; if (!a.isHidden && b.isHidden) return -1; return (a.estimatedTime ?? Infinity) - (b.estimatedTime ?? Infinity);
-                      case 'rating': const ratingA = a.transporterData?.rating ?? 0; const ratingB = b.transporterData?.rating ?? 0; return ratingB - ratingA;
-                      case 'price': default: return a.totalCharges - b.totalCharges;
-                    }
-                  });
-                };
-                const tiedUpVendors = processQuotes(data);
-                const otherVendors = processQuotes(hiddendata);
-                
-                if (isCalculating) return null; // Don't render results while calculating
+          </Card>
+          
+          <div id="results" className="space-y-12">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }} className="space-y-8">
+              {(() => {
+                  const allQuotes = [...(data || []), ...(hiddendata || [])].filter(q => q.message !== "service not available");
+                  const bestValueQuote = allQuotes.length > 0 ? allQuotes.reduce((prev, current) => (prev.totalCharges < current.totalCharges) ? prev : current) : null;
+                  const unlockedQuotes = allQuotes.filter(q => !q.isHidden && typeof q.estimatedTime === "number");
+                  const fastestQuote = unlockedQuotes.length > 0 ? unlockedQuotes.reduce((prev, current) => (prev.estimatedTime! < current.estimatedTime!) ? prev : current) : null;
+                  const processQuotes = (quotes: VendorQuote[] | null) => {
+                    if (!quotes) return [];
+                    const filtered = quotes.filter(q => {
+                      const rating = q.transporterData?.rating ?? 0;
+                      if (q.isHidden) return q.totalCharges <= maxPrice;
+                      return q.totalCharges <= maxPrice && (q.estimatedTime ?? Infinity) <= maxTime && rating >= minRating;
+                    });
+                    return filtered.sort((a, b) => {
+                      switch (sortBy) {
+                        case 'time': if (a.isHidden && !b.isHidden) return 1; if (!a.isHidden && b.isHidden) return -1; return (a.estimatedTime ?? Infinity) - (b.estimatedTime ?? Infinity);
+                        case 'rating': const ratingA = a.transporterData?.rating ?? 0; const ratingB = b.transporterData?.rating ?? 0; return ratingB - ratingA;
+                        case 'price': default: return a.totalCharges - b.totalCharges;
+                      }
+                    });
+                  };
+                  const tiedUpVendors = processQuotes(data);
+                  const otherVendors = processQuotes(hiddendata);
+                  
+                  if (isCalculating) return null; // Don't render results while calculating
 
-                return (
-                <>
-                  {tiedUpVendors.length > 0 && (
-                  <section>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-5 border-l-4 border-indigo-500 pl-4">Your Tied-Up Vendors</h2>
-                    <div className="space-y-4">{tiedUpVendors.map((item, index) => (<VendorResultCard key={`tied-up-${index}`} quote={item} isBestValue={item === bestValueQuote} isFastest={item === fastestQuote} />))}</div>
-                  </section>
-                  )}
-                  {otherVendors.length > 0 && (
-                  <section>
-                    <h2 className="text-2xl font-bold text-slate-800 mb-5 border-l-4 border-slate-400 pl-4">Other Available Vendors</h2>
-                    <div className="space-y-4">{otherVendors.map((item, index) => (<VendorResultCard key={`other-${index}`} quote={item} isBestValue={item === bestValueQuote} isFastest={item === fastestQuote} />))}</div>
-                  </section>
-                  )}
-                  {tiedUpVendors.length === 0 && otherVendors.length === 0 && (
-                    <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-slate-300">
-                      <PackageSearch className="mx-auto h-12 w-12 text-slate-400"/>
-                      <h3 className="mt-4 text-xl font-semibold text-slate-700">No Quotes Available</h3>
-                      <p className="mt-1 text-base text-slate-500">We couldn't find vendors for the details provided. Try adjusting your filter criteria.</p>
-                    </div>
-                  )}
-                </>
-                );
-            })()}
-            </motion.div>
-        </div>
+                  return (
+                    <>
+                      {tiedUpVendors.length > 0 && (
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-5 border-l-4 border-indigo-500 pl-4">Your Tied-Up Vendors</h2>
+                        <div className="space-y-4">{tiedUpVendors.map((item, index) => (<VendorResultCard key={`tied-up-${index}`} quote={item} isBestValue={item === bestValueQuote} isFastest={item === fastestQuote} />))}</div>
+                      </section>
+                      )}
+                      {otherVendors.length > 0 && (
+                      <section>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-5 border-l-4 border-slate-400 pl-4">Other Available Vendors</h2>
+                        <div className="space-y-4">{otherVendors.map((item, index) => (<VendorResultCard key={`other-${index}`} quote={item} isBestValue={item === bestValueQuote} isFastest={item === fastestQuote} />))}</div>
+                      </section>
+                      )}
+                      {tiedUpVendors.length === 0 && otherVendors.length === 0 && (
+                        <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-slate-300">
+                          <PackageSearch className="mx-auto h-12 w-12 text-slate-400"/>
+                          <h3 className="mt-4 text-xl font-semibold text-slate-700">No Quotes Available</h3>
+                          <p className="mt-1 text-base text-slate-500">We couldn't find vendors for the details provided. Try adjusting your filter criteria.</p>
+                        </div>
+                      )}
+                    </>
+                  );
+              })()}
+              </motion.div>
+          </div>
         </>
-       )}
+        )}
       </div>
       <SavePresetModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setSaveBoxDetails(false); }} onSave={handleSavePreset}/>
     </div>
@@ -844,12 +881,12 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {chargeItems.map((item) => (
             item.key in quote && quote[item.key] > 0 && (
-                <div key={item.key} className="flex justify-between">
+              <div key={item.key} className="flex justify-between">
                 <span className="text-slate-500">{item.label}:</span>
                 <span className="font-medium text-slate-800">
-                    {formatCurrency(quote[item.key])}
+                  {formatCurrency(quote[item.key])}
                 </span>
-                </div>
+              </div>
             )
           ))}
         </div>
