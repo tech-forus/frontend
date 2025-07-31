@@ -318,187 +318,187 @@ const CalculatorPage: React.FC = () => {
     setBoxIndexToSave(index);
     setIsModalOpen(true);
   };
+   // ——— HANDLER FUNCTIONS & EFFECTS ———
+  const handleSelectPresetForBox = (index: number, boxPreset: SavedBox) => {
+    const updated = [...boxes];
+    updated[index] = {
+      ...updated[index],
+      length: boxPreset.length,
+      width: boxPreset.width,
+      height: boxPreset.height,
+      weight: boxPreset.weight,
+      description: boxPreset.name, // MODIFIED: Use preset name for the input field
+    };
+    setBoxes(updated);
+
+    if (index === 0 || areDimensionsSame) {
+      setFromPincode(boxPreset.originPincode.toString());
+      // The line below has been removed to prevent auto-filling the destination pincode.
+      // setToPincode(boxPreset.destinationPincode.toString()); 
+      setModeOfTransport(boxPreset.modeoftransport);
+    }
+    setOpenPresetDropdownIndex(null);
+    setSearchTerm("");
+  };
+
+  const handleDimensionTypeChange = (isSame: boolean) => {
+    setAreDimensionsSame(isSame);
+    setBoxes([createNewBox()]);
+    setCalculationTarget("all");
+    setOpenPresetDropdownIndex(null);
+    setSearchTerm("");
+  };
+
+  const addBoxType = () => setBoxes([...boxes, createNewBox()]);
+  const updateBox = (i: number, field: keyof BoxDetails, v: any) => {
+    const copy = [...boxes];
+    copy[i] = { ...copy[i], [field]: v };
+    setBoxes(copy);
+  };
+  const removeBox = (i: number) => {
+    if (boxes.length <= 1) return;
+    if (window.confirm("Are you sure you want to delete this box type?")) {
+      setBoxes(boxes.filter((_, j) => j !== i));
+      setCalculationTarget("all");
+    }
+  };
+  
+  const editBox = (index: number) => {
+    const el = boxFormRefs.current[index];
+    if (el) {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    }
+  };
+
+  const handleForceWeight = (index: number) => {
+    const box = boxes[index];
+    const qty = box.count || 0;
+    const currentTotal = ((box.weight || 0) * qty).toFixed(2);
+    const input = prompt(
+      `Override total weight for "${box.description || `Type ${index + 1}`}" (kg):`,
+      currentTotal
+    );
+    if (input !== null && !isNaN(+input)) {
+      const newTotal = parseFloat(input);
+      const perBox = qty > 0 ? newTotal / qty : 0;
+      updateBox(index, "weight", perBox);
+    }
+    editBox(index);
+  };
+
+  useEffect(() => {
+    fetchSavedBoxes();
+  }, [user]);
+
+  useEffect(() => {
+    const onClickOutside = (ev: MouseEvent) => {
+      if (
+        openPresetDropdownIndex !== null &&
+        presetsContainerRef.current &&
+        !presetsContainerRef.current.contains(ev.target as Node)
+      ) {
+        setOpenPresetDropdownIndex(null);
+      }
+      if (
+        fineTuneRef.current &&
+        !fineTuneRef.current.contains(ev.target as Node)
+      ) {
+        setIsFineTuneOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [openPresetDropdownIndex]);
+
+  // ——— CALCULATION & API CALL ———
+  const calculateQuotes = async () => {
+    setError(null);
+    setData(null);
+    setHiddendata(null);
+
+    const pinRx = /^\d{6}$/;
+    if (!pinRx.test(fromPincode) || !pinRx.test(toPincode)) {
+      setError("Please enter valid 6-digit Origin and Destination Pincodes.");
+      return;
+    }
+
+    const boxesToCalc =
+      calculationTarget === "all" ? boxes : [boxes[calculationTarget]];
+
+    for (const box of boxesToCalc) {
+      if (!box.count || !box.length || !box.width || !box.height || !box.weight) {
+        const name = box.description || `Box Type ${boxes.indexOf(box) + 1}`;
+        setError(`Please fill in all details for "${name}".`);
+        return;
+      }
+    }
+
+    setIsCalculating(true);
+    setCalculationProgress("Aggregating shipment details...");
+
+    let totalChargeable = 0;
+    const divisor = 5000;
+    boxesToCalc.forEach((box) => {
+      const actual = (box.weight || 0) * (box.count || 0);
+      const volumetric =
+        ((box.length! * box.width! * box.height!) / divisor) * (box.count || 0);
+      totalChargeable += Math.max(actual, volumetric);
+    });
+
+    setCalculationProgress("Fetching quotes...");
+
+    try {
+      const resp = await axios.post(
+        "https://backend-bcxr.onrender.com/api/transporter/calculate",
+        {
+          customerID: (user as any).customer._id,
+          userogpincode: (user as any).customer.pincode,
+          modeoftransport: modeOfTransport,
+          fromPincode,
+          toPincode,
+          noofboxes: 1,
+          quantity: 1,
+          length: 1,
+          width: 1,
+          height: 1,
+          weight: totalChargeable,
+          isExpress: false,
+          isFragile: false,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const all = [
+        ...(resp.data.tiedUpResult || []).map((q: VendorQuote) => ({
+          ...q,
+          isTiedUp: true,
+        })),
+        ...(resp.data.companyResult || []).map((q: VendorQuote) => ({
+          ...q,
+          isTiedUp: false,
+        })),
+      ];
+      setData(all.filter((q) => q.isTiedUp));
+      setHiddendata(all.filter((q) => !q.isTiedUp));
+    } catch (e: any) {
+      if (e.response?.status === 401) {
+        setError("Authentication failed. Please log out and log back in.");
+      } else {
+        setError(`Failed to get rates. Error: ${e.message}`);
+      }
+    }
+
+    setCalculationProgress("");
+    setIsCalculating(false);
+    setTimeout(() => {
+      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
   
-  // ——— HANDLER FUNCTIONS & EFFECTS ———
-  const handleSelectPresetForBox = (index: number, boxPreset: SavedBox) => {
-    const updated = [...boxes];
-    updated[index] = {
-      ...updated[index],
-      length: boxPreset.length,
-      width: boxPreset.width,
-      height: boxPreset.height,
-      weight: boxPreset.weight,
-      description: boxPreset.name, // MODIFIED: Use preset name for the input field
-    };
-    setBoxes(updated);
-
-    if (index === 0 || areDimensionsSame) {
-      setFromPincode(boxPreset.originPincode.toString());
-      setToPincode(boxPreset.destinationPincode.toString());
-      setModeOfTransport(boxPreset.modeoftransport);
-    }
-    setOpenPresetDropdownIndex(null);
-    setSearchTerm("");
-  };
-
-  const handleDimensionTypeChange = (isSame: boolean) => {
-    setAreDimensionsSame(isSame);
-    setBoxes([createNewBox()]);
-    setCalculationTarget("all");
-    setOpenPresetDropdownIndex(null);
-    setSearchTerm("");
-  };
-
-  const addBoxType = () => setBoxes([...boxes, createNewBox()]);
-  const updateBox = (i: number, field: keyof BoxDetails, v: any) => {
-    const copy = [...boxes];
-    copy[i] = { ...copy[i], [field]: v };
-    setBoxes(copy);
-  };
-  const removeBox = (i: number) => {
-    if (boxes.length <= 1) return;
-    if (window.confirm("Are you sure you want to delete this box type?")) {
-      setBoxes(boxes.filter((_, j) => j !== i));
-      setCalculationTarget("all");
-    }
-  };
-  
-  const editBox = (index: number) => {
-    const el = boxFormRefs.current[index];
-    if (el) {
-      el.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      });
-    }
-  };
-
-  const handleForceWeight = (index: number) => {
-    const box = boxes[index];
-    const qty = box.count || 0;
-    const currentTotal = ((box.weight || 0) * qty).toFixed(2);
-    const input = prompt(
-      `Override total weight for "${box.description || `Type ${index + 1}`}" (kg):`,
-      currentTotal
-    );
-    if (input !== null && !isNaN(+input)) {
-      const newTotal = parseFloat(input);
-      const perBox = qty > 0 ? newTotal / qty : 0;
-      updateBox(index, "weight", perBox);
-    }
-    editBox(index);
-  };
-
-  useEffect(() => {
-    fetchSavedBoxes();
-  }, [user]);
-
-  useEffect(() => {
-    const onClickOutside = (ev: MouseEvent) => {
-      if (
-        openPresetDropdownIndex !== null &&
-        presetsContainerRef.current &&
-        !presetsContainerRef.current.contains(ev.target as Node)
-      ) {
-        setOpenPresetDropdownIndex(null);
-      }
-      if (
-        fineTuneRef.current &&
-        !fineTuneRef.current.contains(ev.target as Node)
-      ) {
-        setIsFineTuneOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [openPresetDropdownIndex]);
-
-  // ——— CALCULATION & API CALL ———
-  const calculateQuotes = async () => {
-    setError(null);
-    setData(null);
-    setHiddendata(null);
-
-    const pinRx = /^\d{6}$/;
-    if (!pinRx.test(fromPincode) || !pinRx.test(toPincode)) {
-      setError("Please enter valid 6-digit Origin and Destination Pincodes.");
-      return;
-    }
-
-    const boxesToCalc =
-      calculationTarget === "all" ? boxes : [boxes[calculationTarget]];
-
-    for (const box of boxesToCalc) {
-      if (!box.count || !box.length || !box.width || !box.height || !box.weight) {
-        const name = box.description || `Box Type ${boxes.indexOf(box) + 1}`;
-        setError(`Please fill in all details for "${name}".`);
-        return;
-      }
-    }
-
-    setIsCalculating(true);
-    setCalculationProgress("Aggregating shipment details...");
-
-    let totalChargeable = 0;
-    const divisor = 5000;
-    boxesToCalc.forEach((box) => {
-      const actual = (box.weight || 0) * (box.count || 0);
-      const volumetric =
-        ((box.length! * box.width! * box.height!) / divisor) * (box.count || 0);
-      totalChargeable += Math.max(actual, volumetric);
-    });
-
-    setCalculationProgress("Fetching quotes...");
-
-    try {
-      const resp = await axios.post(
-        "https://backend-bcxr.onrender.com/api/transporter/calculate",
-        {
-          customerID: (user as any).customer._id,
-          userogpincode: (user as any).customer.pincode,
-          modeoftransport: modeOfTransport,
-          fromPincode,
-          toPincode,
-          noofboxes: 1,
-          quantity: 1,
-          length: 1,
-          width: 1,
-          height: 1,
-          weight: totalChargeable,
-          isExpress: false,
-          isFragile: false,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const all = [
-        ...(resp.data.tiedUpResult || []).map((q: VendorQuote) => ({
-          ...q,
-          isTiedUp: true,
-        })),
-        ...(resp.data.companyResult || []).map((q: VendorQuote) => ({
-          ...q,
-          isTiedUp: false,
-        })),
-      ];
-      setData(all.filter((q) => q.isTiedUp));
-      setHiddendata(all.filter((q) => !q.isTiedUp));
-    } catch (e: any) {
-      if (e.response?.status === 401) {
-        setError("Authentication failed. Please log out and log back in.");
-      } else {
-        setError(`Failed to get rates. Error: ${e.message}`);
-      }
-    }
-
-    setCalculationProgress("");
-    setIsCalculating(false);
-    setTimeout(() => {
-      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  };
-
   // ——— SUMMARY VALUES ———
   const totalWeight = boxes.reduce(
     (sum, b) => sum + (b.weight || 0) * (b.count || 0),
