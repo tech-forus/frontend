@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   AlertCircle,
   Award,
@@ -40,6 +40,11 @@ import axios from "axios";
 import Cookies from "js-cookie";
 import { motion, AnimatePresence } from "framer-motion";
 
+// --- MODIFIED: Maximum dimension constants (in cm) ---
+const MAX_DIMENSION_LENGTH = 1500;
+const MAX_DIMENSION_WIDTH = 300; // Unchanged as per request
+const MAX_DIMENSION_HEIGHT = 300;
+
 // --- TYPE DEFINITIONS ---
 
 type VendorQuote = {
@@ -53,6 +58,9 @@ type VendorQuote = {
   transporterName: string;
   deliveryTime: string;
   estimatedTime?: number;
+  // --- ADDED: New weight fields from backend ---
+  actualWeight: number;
+  volumetricWeight: number;
   chargeableWeight: number;
   totalCharges: number;
   logoUrl?: string;
@@ -166,6 +174,7 @@ const CalculatorPage: React.FC = () => {
   const token = Cookies.get("authToken");
 
   // --- COMPONENT STATE ---
+  const presetRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [sortBy, setSortBy] = useState<"price" | "time" | "rating">("price");
   const [isCalculating, setIsCalculating] = useState(false);
   const [calculationProgress, setCalculationProgress] = useState("");
@@ -216,6 +225,18 @@ const CalculatorPage: React.FC = () => {
   const [minRating, setMinRating] = useState(0);
   const fineTuneRef = useRef<HTMLDivElement>(null);
 
+  // --- ADDED: Validation logic for dimensions ---
+  const isAnyDimensionExceeded = useMemo(
+    () =>
+      boxes.some(
+        (box) =>
+          (box.length ?? 0) > MAX_DIMENSION_LENGTH ||
+          (box.width ?? 0) > MAX_DIMENSION_WIDTH ||
+          (box.height ?? 0) > MAX_DIMENSION_HEIGHT
+      ),
+    [boxes]
+  );
+
   useEffect(() => {
     if (customer?.pincode) {
       setFromPincode(customer.pincode);
@@ -229,13 +250,36 @@ const CalculatorPage: React.FC = () => {
     const digitsOnly = raw.replace(/\D/g, "").slice(0, 6);
     setter(digitsOnly);
   };
+  const handleDimensionChange = (
+    index: number,
+    field: 'length' | 'width' | 'height',
+    value: string,
+    maxLength: number,
+    maxValue: number // We've added this to check the value
+  ) => {
+    if (value) {
+      // First, still limit the number of digits
+      let finalValueStr = value.slice(0, maxLength);
 
+      // Next, check if the numeric value exceeds the maximum allowed value
+      if (Number(finalValueStr) > maxValue) {
+        // If it does, clamp it down to the max value
+        finalValueStr = String(maxValue);
+      }
+      
+      // Finally, update the state with the corrected value
+      updateBox(index, field, Number(finalValueStr));
+    } else {
+      // This allows the user to clear the input field
+      updateBox(index, field, undefined);
+    }
+  };
   // --- BACKEND & DATA FUNCTIONS ---
   const fetchSavedBoxes = async () => {
     if (!user || !token) return;
     try {
       const response = await axios.get(
-        `https://backend-bcxr.onrender.com/api/transporter/getpackinglist?customerId=${
+        `http://localhost:8000/api/transporter/getpackinglist?customerId=${
           (user as any).customer._id
         }`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -277,7 +321,7 @@ const CalculatorPage: React.FC = () => {
 
     try {
       await axios.post(
-        `https://backend-bcxr.onrender.com/api/transporter/savepackinglist`,
+        `http://localhost:8000/api/transporter/savepackinglist`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -296,7 +340,7 @@ const CalculatorPage: React.FC = () => {
     if (window.confirm("Are you sure you want to delete this preset permanently?")) {
         try {
             setError(null);
-            await axios.delete(`https://backend-bcxr.onrender.com/api/transporter/deletepackinglist/${presetId}`, {
+            await axios.delete(`http://localhost:8000/api/transporter/deletepackinglist/${presetId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             await fetchSavedBoxes(); // Refresh the list
@@ -319,185 +363,183 @@ const CalculatorPage: React.FC = () => {
     setIsModalOpen(true);
   };
    // ——— HANDLER FUNCTIONS & EFFECTS ———
-  const handleSelectPresetForBox = (index: number, boxPreset: SavedBox) => {
-    const updated = [...boxes];
-    updated[index] = {
-      ...updated[index],
-      length: boxPreset.length,
-      width: boxPreset.width,
-      height: boxPreset.height,
-      weight: boxPreset.weight,
-      description: boxPreset.name, // MODIFIED: Use preset name for the input field
-    };
-    setBoxes(updated);
+  const handleSelectPresetForBox = (index: number, boxPreset: SavedBox) => {
+    const updated = [...boxes];
+    updated[index] = {
+      ...updated[index],
+      length: boxPreset.length,
+      width: boxPreset.width,
+      height: boxPreset.height,
+      weight: boxPreset.weight,
+      description: boxPreset.name, // MODIFIED: Use preset name for the input field
+    };
+    setBoxes(updated);
 
-    if (index === 0 || areDimensionsSame) {
-      setFromPincode(boxPreset.originPincode.toString());
+    if (index === 0 || areDimensionsSame) {
+      setFromPincode(boxPreset.originPincode.toString());
       // The line below has been removed to prevent auto-filling the destination pincode.
-      // setToPincode(boxPreset.destinationPincode.toString()); 
-      setModeOfTransport(boxPreset.modeoftransport);
-    }
-    setOpenPresetDropdownIndex(null);
-    setSearchTerm("");
-  };
+      // setToPincode(boxPreset.destinationPincode.toString()); 
+      setModeOfTransport(boxPreset.modeoftransport);
+    }
+    setOpenPresetDropdownIndex(null);
+    setSearchTerm("");
+  };
 
-  const handleDimensionTypeChange = (isSame: boolean) => {
-    setAreDimensionsSame(isSame);
-    setBoxes([createNewBox()]);
-    setCalculationTarget("all");
-    setOpenPresetDropdownIndex(null);
-    setSearchTerm("");
-  };
+  const handleDimensionTypeChange = (isSame: boolean) => {
+    setAreDimensionsSame(isSame);
+    setBoxes([createNewBox()]);
+    setCalculationTarget("all");
+    setOpenPresetDropdownIndex(null);
+    setSearchTerm("");
+  };
 
-  const addBoxType = () => setBoxes([...boxes, createNewBox()]);
-  const updateBox = (i: number, field: keyof BoxDetails, v: any) => {
-    const copy = [...boxes];
-    copy[i] = { ...copy[i], [field]: v };
-    setBoxes(copy);
-  };
-  const removeBox = (i: number) => {
-    if (boxes.length <= 1) return;
-    if (window.confirm("Are you sure you want to delete this box type?")) {
-      setBoxes(boxes.filter((_, j) => j !== i));
-      setCalculationTarget("all");
-    }
-  };
-  
-  const editBox = (index: number) => {
-    const el = boxFormRefs.current[index];
-    if (el) {
-      el.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      });
-    }
-  };
+  const addBoxType = () => setBoxes([...boxes, createNewBox()]);
+  const updateBox = (i: number, field: keyof BoxDetails, v: any) => {
+    const copy = [...boxes];
+    copy[i] = { ...copy[i], [field]: v };
+    setBoxes(copy);
+  };
+  const removeBox = (i: number) => {
+    if (boxes.length <= 1) return;
+    if (window.confirm("Are you sure you want to delete this box type?")) {
+      setBoxes(boxes.filter((_, j) => j !== i));
+      setCalculationTarget("all");
+    }
+  };
+  
+  const editBox = (index: number) => {
+    const el = boxFormRefs.current[index];
+    if (el) {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    }
+  };
 
-  const handleForceWeight = (index: number) => {
-    const box = boxes[index];
-    const qty = box.count || 0;
-    const currentTotal = ((box.weight || 0) * qty).toFixed(2);
-    const input = prompt(
-      `Override total weight for "${box.description || `Type ${index + 1}`}" (kg):`,
-      currentTotal
-    );
-    if (input !== null && !isNaN(+input)) {
-      const newTotal = parseFloat(input);
-      const perBox = qty > 0 ? newTotal / qty : 0;
-      updateBox(index, "weight", perBox);
-    }
-    editBox(index);
-  };
+  const handleForceWeight = (index: number) => {
+    const box = boxes[index];
+    const qty = box.count || 0;
+    const currentTotal = ((box.weight || 0) * qty).toFixed(2);
+    const input = prompt(
+      `Override total weight for "${box.description || `Type ${index + 1}`}" (kg):`,
+      currentTotal
+    );
+    if (input !== null && !isNaN(+input)) {
+      const newTotal = parseFloat(input);
+      const perBox = qty > 0 ? newTotal / qty : 0;
+      updateBox(index, "weight", perBox);
+    }
+    editBox(index);
+  };
 
-  useEffect(() => {
-    fetchSavedBoxes();
-  }, [user]);
+  useEffect(() => {
+    fetchSavedBoxes();
+  }, [user]);
 
-  useEffect(() => {
-    const onClickOutside = (ev: MouseEvent) => {
-      if (
-        openPresetDropdownIndex !== null &&
-        presetsContainerRef.current &&
-        !presetsContainerRef.current.contains(ev.target as Node)
-      ) {
-        setOpenPresetDropdownIndex(null);
-      }
-      if (
-        fineTuneRef.current &&
-        !fineTuneRef.current.contains(ev.target as Node)
-      ) {
-        setIsFineTuneOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [openPresetDropdownIndex]);
+  useEffect(() => {
+    const onClickOutside = (ev: MouseEvent) => {
+      if (
+        openPresetDropdownIndex !== null &&
+        presetsContainerRef.current &&
+        !presetsContainerRef.current.contains(ev.target as Node)
+      ) {
+        setOpenPresetDropdownIndex(null);
+      }
+      if (
+        fineTuneRef.current &&
+        !fineTuneRef.current.contains(ev.target as Node)
+      ) {
+        setIsFineTuneOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [openPresetDropdownIndex]);
 
-  // ——— CALCULATION & API CALL ———
-  const calculateQuotes = async () => {
-    setError(null);
-    setData(null);
-    setHiddendata(null);
+  // ——— CALCULATION & API CALL ———
+  const calculateQuotes = async () => {
+    setError(null);
+    setData(null);
+    setHiddendata(null);
 
-    const pinRx = /^\d{6}$/;
-    if (!pinRx.test(fromPincode) || !pinRx.test(toPincode)) {
-      setError("Please enter valid 6-digit Origin and Destination Pincodes.");
-      return;
-    }
+    const pinRx = /^\d{6}$/;
+    if (!pinRx.test(fromPincode) || !pinRx.test(toPincode)) {
+      setError("Please enter valid 6-digit Origin and Destination Pincodes.");
+      return;
+    }
 
-    const boxesToCalc =
-      calculationTarget === "all" ? boxes : [boxes[calculationTarget]];
+    const boxesToCalc =
+      calculationTarget === "all" ? boxes : [boxes[calculationTarget]];
+    
+    // --- MODIFIED: Validate boxes before preparing payload ---
+    const shipmentPayload = [];
+    for (const box of boxesToCalc) {
+      if (!box.count || !box.length || !box.width || !box.height || !box.weight) {
+        const name = box.description || `Box Type ${boxes.indexOf(box) + 1}`;
+        setError(`Please fill in all details for "${name}".`);
+        return;
+      }
+      shipmentPayload.push({
+        count: box.count,
+        length: box.length,
+        width: box.width,
+        height: box.height,
+        weight: box.weight,
+      });
+    }
 
-    for (const box of boxesToCalc) {
-      if (!box.count || !box.length || !box.width || !box.height || !box.weight) {
-        const name = box.description || `Box Type ${boxes.indexOf(box) + 1}`;
-        setError(`Please fill in all details for "${name}".`);
-        return;
-      }
-    }
+    setIsCalculating(true);
+    setCalculationProgress("Fetching quotes from vendors...");
 
-    setIsCalculating(true);
-    setCalculationProgress("Aggregating shipment details...");
+    try {
+      // --- MODIFIED: This is the new, correct API call structure ---
+      const resp = await axios.post(
+        "http://localhost:8000/api/transporter/calculate", // Ensure this endpoint matches your backend
+        {
+          // --- Main details ---
+          customerID: (user as any).customer._id,
+          userogpincode: (user as any).customer.pincode,
+          modeoftransport: modeOfTransport,
+          fromPincode,
+          toPincode,
+          // --- NEW PAYLOAD ---
+          // Send the detailed array instead of a single pre-calculated weight
+          shipment_details: shipmentPayload,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    let totalChargeable = 0;
-    const divisor = 5000;
-    boxesToCalc.forEach((box) => {
-      const actual = (box.weight || 0) * (box.count || 0);
-      const volumetric =
-        ((box.length! * box.width! * box.height!) / divisor) * (box.count || 0);
-      totalChargeable += Math.max(actual, volumetric);
-    });
+      // --- REMOVED: Old frontend calculation logic ---
+      // The old logic that calculated totalChargeable here has been deleted.
+      
+      const all = [
+        ...(resp.data.tiedUpResult || []).map((q: VendorQuote) => ({
+          ...q,
+          isTiedUp: true,
+        })),
+        ...(resp.data.companyResult || []).map((q: VendorQuote) => ({
+          ...q,
+          isTiedUp: false,
+        })),
+      ];
+      setData(all.filter((q) => q.isTiedUp));
+      setHiddendata(all.filter((q) => !q.isTiedUp));
+    } catch (e: any) {
+      if (e.response?.status === 401) {
+        setError("Authentication failed. Please log out and log back in.");
+      } else {
+        setError(`Failed to get rates. Error: ${e.message}`);
+      }
+    }
 
-    setCalculationProgress("Fetching quotes...");
-
-    try {
-      const resp = await axios.post(
-        "https://backend-bcxr.onrender.com/api/transporter/calculate",
-        {
-          customerID: (user as any).customer._id,
-          userogpincode: (user as any).customer.pincode,
-          modeoftransport: modeOfTransport,
-          fromPincode,
-          toPincode,
-          noofboxes: 1,
-          quantity: 1,
-          length: 1,
-          width: 1,
-          height: 1,
-          weight: totalChargeable,
-          isExpress: false,
-          isFragile: false,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const all = [
-        ...(resp.data.tiedUpResult || []).map((q: VendorQuote) => ({
-          ...q,
-          isTiedUp: true,
-        })),
-        ...(resp.data.companyResult || []).map((q: VendorQuote) => ({
-          ...q,
-          isTiedUp: false,
-        })),
-      ];
-      setData(all.filter((q) => q.isTiedUp));
-      setHiddendata(all.filter((q) => !q.isTiedUp));
-    } catch (e: any) {
-      if (e.response?.status === 401) {
-        setError("Authentication failed. Please log out and log back in.");
-      } else {
-        setError(`Failed to get rates. Error: ${e.message}`);
-      }
-    }
-
-    setCalculationProgress("");
-    setIsCalculating(false);
-    setTimeout(() => {
-      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  };
+    setCalculationProgress("");
+    setIsCalculating(false);
+    setTimeout(() => {
+      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
   
   // ——— SUMMARY VALUES ———
   const totalWeight = boxes.reduce(
@@ -508,6 +550,44 @@ const CalculatorPage: React.FC = () => {
   const displayableBoxes = savedBoxes.filter((b) =>
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+// ... inside your component function ...
+
+// This is the state you're already using to track the open dropdown
+// const [openPresetDropdownIndex, setOpenPresetDropdownIndex] = useState(null);
+
+// This is the ref array you're already populating
+// const presetRefs = useRef([]);
+
+
+// --- ADD THIS CODE ---
+useEffect(() => {
+    /**
+     * Handles clicks outside of the currently open preset dropdown.
+     */
+    function handleClickOutside(event) {
+      // Proceed only if a dropdown is open (index is not null)
+      if (openPresetDropdownIndex !== null) {
+        
+        // Get the DOM element for the currently open dropdown using its index
+        const currentDropdownRef = presetRefs.current[openPresetDropdownIndex];
+
+        // If that element exists and the click was *not* inside it
+        if (currentDropdownRef && !currentDropdownRef.contains(event.target)) {
+          setOpenPresetDropdownIndex(null); // Close the dropdown
+        }
+      }
+    }
+
+    // This line tells the browser to start listening for clicks.
+    document.addEventListener("mousedown", handleClickOutside);
+
+    // This 'return' function is the cleanup step.
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+    
+}, [openPresetDropdownIndex]);
 
   // --- JSX RENDER ---
   return (
@@ -537,516 +617,536 @@ const CalculatorPage: React.FC = () => {
           </motion.p>
         </header>
 
-        <Card>
-          <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
-            <Navigation size={22} className="mr-3 text-indigo-500" /> Mode & Route
-          </h2>
-          <p className="text-sm text-slate-500 mb-6">
-            Select your mode of transport and enter the pickup and destination
-            pincodes.
-          </p>
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { name: "Road", icon: Truck, isAvailable: true },
-                { name: "Rail", icon: Train, isAvailable: false },
-                { name: "Air", icon: Plane, isAvailable: false },
-                { name: "Ship", icon: ShipIcon, isAvailable: false },
-              ].map((mode) => (
-                <button
-                  key={mode.name}
-                  onClick={() =>
-                    mode.isAvailable ? setModeOfTransport(mode.name as any) : null
-                  }
-                  className={`relative group w-full p-4 rounded-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 focus-visible:ring-indigo-500 ${
-                    modeOfTransport === mode.name
-                      ? "bg-indigo-600 text-white shadow-lg"
-                      : mode.isAvailable
-                      ? "bg-white text-slate-700 border border-slate-300 hover:border-indigo-500 hover:text-indigo-600"
-                      : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
-                  }`}
-                  disabled={!mode.isAvailable}
-                  aria-label={
-                    mode.isAvailable
-                      ? `Select ${mode.name} transport`
-                      : `${mode.name} transport (Coming Soon)`
-                  }
-                >
-                  <div
-                    className={`flex flex-col items-center justify-center gap-2 transition-all duration-300 ${
-                      !mode.isAvailable && "opacity-50"
-                    }`}
-                  >
-                    <mode.icon size={24} className="mx-auto" />
-                    <span className="text-sm font-semibold">{mode.name}</span>
-                  </div>
-                  {!mode.isAvailable && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-800/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
-                      <span className="text-xs font-bold text-white uppercase tracking-wider bg-slate-800/70 px-3 py-1 rounded-full">
-                        Coming Soon
-                      </span>
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              <InputField
-                label="Origin Pincode"
-                id="fromPincode"
-                value={fromPincode}
-                placeholder="e.g., 400001"
-                maxLength={6}
-                icon={<MapPin />}
-                inputMode="numeric"
-                pattern="\d{6}"
-                onChange={(e) =>
-                  handlePincodeChange(e.target.value, setFromPincode)
+        <Card>
+          <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
+            <Navigation size={22} className="mr-3 text-indigo-500" /> Mode & Route
+          </h2>
+          <p className="text-sm text-slate-500 mb-6">
+            Select your mode of transport and enter the pickup and destination
+            pincodes.
+          </p>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { name: "Road", icon: Truck, isAvailable: true },
+                { name: "Rail", icon: Train, isAvailable: false },
+                { name: "Air", icon: Plane, isAvailable: false },
+                { name: "Ship", icon: ShipIcon, isAvailable: false },
+              ].map((mode) => (
+                <button
+                  key={mode.name}
+                  onClick={() =>
+                    mode.isAvailable ? setModeOfTransport(mode.name as any) : null
+                  }
+                  className={`relative group w-full p-4 rounded-xl transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 focus-visible:ring-indigo-500 ${
+                    modeOfTransport === mode.name
+                      ? "bg-indigo-600 text-white shadow-lg"
+                      : mode.isAvailable
+                      ? "bg-white text-slate-700 border border-slate-300 hover:border-indigo-500 hover:text-indigo-600"
+                      : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                  }`}
+                  disabled={!mode.isAvailable}
+                  aria-label={
+                    mode.isAvailable
+                      ? `Select ${mode.name} transport`
+                      : `${mode.name} transport (Coming Soon)`
+                  }
+                >
+                  <div
+                    className={`flex flex-col items-center justify-center gap-2 transition-all duration-300 ${
+                      !mode.isAvailable && "opacity-50"
+                    }`}
+                  >
+                    <mode.icon size={24} className="mx-auto" />
+                    <span className="text-sm font-semibold">{mode.name}</span>
+                  </div>
+                  {!mode.isAvailable && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-800/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider bg-slate-800/70 px-3 py-1 rounded-full">
+                        Coming Soon
+                      </span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <InputField
+                label="Origin Pincode"
+                id="fromPincode"
+                value={fromPincode}
+                placeholder="e.g., 400001"
+                maxLength={6}
+                icon={<MapPin />}
+                inputMode="numeric"
+                pattern="\d{6}"
+                onChange={(e) =>
+                  handlePincodeChange(e.target.value, setFromPincode)
+                }
+              />
+              <InputField
+                label="Destination Pincode"
+                id="toPincode"
+                value={toPincode}
+                placeholder="e.g., 110001"
+                maxLength={6}
+                icon={<MapPin />}
+                inputMode="numeric"
+                pattern="\d{6}"
+                onChange={(e) =>
+                  handlePincodeChange(e.target.value, setToPincode)
+                }
+              />
+            </div>
+          </div>
+        </Card>
+<Card>
+    {/* Header */}
+    <div className="mb-6">
+    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+        <Boxes size={22} className="text-indigo-500" /> Shipment Details
+    </h2>
+    <p className="text-sm text-slate-500">
+        Enter dimensions and weight, or select a saved preset to auto‑fill.
+    </p>
+    </div>
+
+    {/* Box Forms */}
+    <div className="space-y-6">
+    <AnimatePresence>
+        {boxes.map((box, index) => (
+        <motion.div
+            key={box.id}
+            layout
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -50, scale: 0.9 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="p-5 bg-slate-50 border border-slate-200 rounded-xl relative"
+        >
+            <button
+            onClick={() => {
+                if (boxes.length > 1) {
+                removeBox(index);
+                } else {
+                setBoxes([createNewBox()]);
                 }
-              />
-              <InputField
-                label="Destination Pincode"
-                id="toPincode"
-                value={toPincode}
-                placeholder="e.g., 110001"
-                maxLength={6}
-                icon={<MapPin />}
-                inputMode="numeric"
-                pattern="\d{6}"
-                onChange={(e) =>
-                  handlePincodeChange(e.target.value, setToPincode)
-                }
-              />
-            </div>
-          </div>
-        </Card>
-        
-        <Card>
-          {/* Header */}
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Boxes size={22} className="text-indigo-500" /> Shipment Details
-            </h2>
-            <p className="text-sm text-slate-500">
-              Enter dimensions and weight, or select a saved preset to auto‑fill.
-            </p>
-          </div>
-
-          {/* Box Forms */}
-          <div className="space-y-6" ref={presetsContainerRef}>
-            <AnimatePresence>
-              {boxes.map((box, index) => (
-                <motion.div
-                  key={box.id}
-                  layout
-                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -50, scale: 0.9 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                  className="p-5 bg-slate-50 border border-slate-200 rounded-xl relative"
-                >
-                  <button
-                    onClick={() => {
-                      if (boxes.length > 1) {
-                        removeBox(index);
-                      } else {
-                        setBoxes([createNewBox()]);
-                        setCalculationTarget("all");
-                      }
-                    }}
-                    title={
-                      boxes.length > 1
-                        ? "Remove this box type"
-                        : "Clear all fields"
-                    }
-                    className="absolute top-2 right-2 p-1 text-red-500 hover:bg-red-100 rounded-full transition-colors"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-
-                  {/* Row 1: Preset │ Number of Boxes │ Weight */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    {/* Preset dropdown */}
-                    <div className="relative text-sm">
-                      <InputField
-                        label="Box Name"
-                        id={`preset-${index}`}
-                        placeholder="Select or type to search..."
-                        value={
-                          box.description ||
-                          (openPresetDropdownIndex === index ? searchTerm : "")
-                        }
-                        onChange={e => {
-                            updateBox(index, "description", e.target.value);
-                            setSearchTerm(e.target.value);
-                        }}
-                        onFocus={() => {
-                          setOpenPresetDropdownIndex(index);
-                          setSearchTerm("");
-                        }}
-                        icon={<PackageSearch size={16} />}
-                        className="text-sm"
-                        autoComplete="off"
-                        required
-                      />
-                      <AnimatePresence>
-                        {openPresetDropdownIndex === index && (
-                          <motion.ul
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg"
-                          >
-                            {displayableBoxes.length > 0 ? (
-                              displayableBoxes.map((preset) => (
-                                <li
-                                    key={preset._id}
-                                    onClick={() => handleSelectPresetForBox(index, preset)}
-                                    className="group flex justify-between items-center px-3 py-2 hover:bg-indigo-50 cursor-pointer text-slate-700 text-sm transition-colors"
-                                >
-                                    <span>{preset.name}</span>
-                                    <button
-                                        onClick={(e) => handleDeletePreset(preset._id, e)}
-                                        className="p-1.5 text-slate-400 opacity-0 group-hover:opacity-100 hover:!opacity-100 hover:text-red-600 hover:bg-red-100 rounded-full transition-all duration-200"
-                                        title={`Delete "${preset.name}"`}
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </li>
-                              ))
-                            ) : (
-                              <li className="px-4 py-2 italic text-sm text-slate-500">
-                                {savedBoxes.length === 0
-                                  ? "No presets saved yet."
-                                  : "No matches found."}
-                              </li>
-                            )}
-                          </motion.ul>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Number of Boxes */}
-                    <InputField
-                      label="Number of Boxes"
-                      id={`count-${index}`}
-                      type="number"
-                      min={1}
-                      value={box.count ?? ""}
-                      onChange={(e) =>
-                        updateBox(
-                          index,
-                          "count",
-                          e.target.valueAsNumber ?? undefined
-                        )
-                      }
-                      placeholder="e.g., 10"
-                      required
-                    />
-
-                    {/* Weight per Box */}
-                    <InputField
-                      label="Weight (kg)"
-                      id={`weight-${index}`}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={box.weight ?? ""}
-                      onChange={(e) =>
-                        updateBox(
-                          index,
-                          "weight",
-                          e.target.valueAsNumber ?? undefined
-                        )
-                      }
-                      placeholder="e.g., 5.5"
-                      required
-                    />
-                  </div>
-
-                  {/* Row 2: Dimensions */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <InputField
-                      label="Length (cm)"
-                      id={`length-${index}`}
-                      type="number"
-                      min={0}
-                      value={box.length ?? ""}
-                      onChange={(e) =>
-                        updateBox(
-                          index,
-                          "length",
-                          e.target.valueAsNumber ?? undefined
-                        )
-                      }
-                      placeholder="Length"
-                      required
-                    />
-                    <InputField
-                      label="Width (cm)"
-                      id={`width-${index}`}
-                      type="number"
-                      min={0}
-                      value={box.width ?? ""}
-                      onChange={(e) =>
-                        updateBox(
-                          index,
-                          "width",
-                          e.target.valueAsNumber ?? undefined
-                        )
-                      }
-                      placeholder="Width"
-                      required
-                    />
-                    <InputField
-                      label="Height (cm)"
-                      id={`height-${index}`}
-                      type="number"
-                      min={0}
-                      value={box.height ?? ""}
-                      onChange={(e) =>
-                        updateBox(
-                          index,
-                          "height",
-                          e.target.valueAsNumber ?? undefined
-                        )
-                      }
-                      placeholder="Height"
-                      required
-                    />
-                  </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <button
-                      onClick={() => triggerSavePresetForBox(index)}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-indigo-700 bg-indigo-100 rounded-lg hover:bg-indigo-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
-                      title="Save this box configuration as a new preset"
-                    >
-                      <Save size={14} />
-                      Save as Preset
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-
-            <div className="flex justify-between items-center pt-6 border-t border-slate-200">
-                <button
-                  onClick={addBoxType}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
-                >
-                  <PlusCircle size={18} /> Add Another Box Type
-                </button>
-                
-                {totalWeight > 0 && (
-                    <motion.div 
-                        initial={{ opacity: 0, x: 10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="text-right"
-                    >
-                        <p className="text-sm font-medium text-slate-500">Total Weight</p>
-                        <p className="text-2xl font-bold text-slate-800">
-                            {totalWeight.toFixed(2)}
-                            <span className="text-base font-semibold text-slate-600 ml-1">kg</span>
-                        </p>
-                    </motion.div>
-                )}
-            </div>
-          </div>
-        </Card>
-
-        {totalBoxes > 0 && (
-          <Card>
-            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Package size={22} className="mr-3 text-indigo-500" /> Shipment
-              Summary
-            </h2>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left text-slate-600">
-                <thead className="text-xs text-slate-700 uppercase bg-slate-100 rounded-t-lg">
-                  <tr>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Quantity</th>
-                    <th className="px-4 py-3">Total Weight</th>
-                    <th className="px-4 py-3">Volume (m³)</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  <AnimatePresence>
-                    {boxes.map((box, index) => {
-                      const qty = box.count || 0;
-                      const totalW = ((box.weight || 0) * qty).toFixed(2);
-                      const totalV = (
-                        ((box.length || 0) *
-                          (box.width || 0) *
-                          (box.height || 0) *
-                          qty) /
-                        1e6
-                      ).toFixed(2);
-
-                      return (
-                        <motion.tr
-                          key={box.id}
-                          layout
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0, x: -30 }}
-                          className="bg-white border-b border-slate-200 hover:bg-slate-50"
-                        >
-                          <td className="px-4 py-3">
-                            {box.description ||
-                              (areDimensionsSame
-                                ? "Standard Box"
-                                : `Type ${index + 1}`)}
-                          </td>
-                          <td className="px-4 py-3">{qty}</td>
-                          <td className="px-4 py-3">{totalW} kg</td>
-                          <td className="px-4 py-3">{totalV} m³</td>
-                          <td className="px-4 py-3 flex justify-end items-center gap-2">
-                            <button
-                              onClick={() => editBox(index)}
-                              title="Edit"
-                              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
-                            >
-                              <Edit3 size={16} />
-                            </button>
-                            <button
-                              onClick={() => removeBox(index)}
-                              disabled={boxes.length <= 1}
-                              title="Delete"
-                              className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </motion.tr>
-                      );
-                    })}
-                  </AnimatePresence>
-                </tbody>
-
-                <tfoot>
-                  <tr className="font-semibold text-slate-800 bg-slate-50">
-                    <td colSpan={1} className="px-4 py-3 text-right">
-                      Grand Total
-                    </td>
-                    <td className="px-4 py-3">{totalBoxes} Boxes</td>
-                    <td className="px-4 py-3">{totalWeight.toFixed(2)} kg</td>
-                    <td className="px-4 py-3">
-                      {boxes
-                        .reduce(
-                          (sum, b) =>
-                            sum +
-                            ((b.length || 0) *
-                              (b.width || 0) *
-                              (b.height || 0) *
-                              (b.count || 0)) /
-                              1e6,
-                          0
-                        )
-                        .toFixed(2)}{" "}
-                      m³
-                    </td>
-                    <td className="px-4 py-3"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </Card>
-        )}
-
-        <div className="text-center pt-4 pb-8">
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="inline-flex items-center gap-3 bg-red-100 text-red-800 font-semibold px-4 py-3 rounded-xl mb-6 shadow-sm"
+            }}
+            title={
+                boxes.length > 1
+                ? "Remove this box type"
+                : "Clear all fields"
+            }
+            className="absolute top-2 right-2 p-1 text-red-500 hover:bg-red-100 rounded-full transition-colors"
             >
-              <AlertCircle size={20} />
-              {error}
-            </motion.div>
-          )}
-          <motion.button
-            onClick={calculateQuotes}
-            disabled={isCalculating}
-            whileHover={{ scale: isCalculating ? 1 : 1.05 }}
-            whileTap={{ scale: isCalculating ? 1 : 0.95 }}
-            className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-indigo-600 text-white text-lg font-bold rounded-full shadow-lg shadow-indigo-500/50 hover:bg-indigo-700 transition-all duration-300 disabled:opacity-60 disabled:shadow-none"
-          >
-            {isCalculating ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <CalculatorIcon />
-            )}
-            {isCalculating
-              ? calculationProgress || "Calculating Rates..."
-              : "Calculate Freight Cost"}
-          </motion.button>
-        </div>
+            <Trash2 size={18} />
+            </button>
 
-        {(data || hiddendata) && (
-          <>
-            <Card>
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
-                    <Award size={22} className="mr-3 text-indigo-500" /> Sort &
-                    Filter Results
-                  </h2>
-                  <p className="text-sm text-slate-500 mb-6">
-                    Quickly organize quotes by price, speed, or vendor rating.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <div className="flex-grow w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <SortOptionButton
-                    label="Lowest Price"
-                    icon={<IndianRupee size={16} />}
-                    selected={sortBy === "price"}
-                    onClick={() => setSortBy("price")}
-                  />
-                  <SortOptionButton
-                    label="Fastest"
-                    icon={<Zap size={16} />}
-                    selected={sortBy === "time"}
-                    onClick={() => setSortBy("time")}
-                  />
-                  <SortOptionButton
-                    label="Highest Rated"
-                    icon={<Award size={16} />}
-                    selected={sortBy === "rating"}
-                    onClick={() => setSortBy("rating")}
-                  />
-                </div>
-                <div className="relative w-full sm:w-auto" ref={fineTuneRef}>
-                  <button
-                    onClick={() => setIsFineTuneOpen((prev) => !prev)}
-                    className="w-full px-5 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors border border-slate-300"
-                  >
-                    Fine-Tune Sort
-                  </button>
-                  <AnimatePresence>
-                    {isFineTuneOpen && (
-                      <FineTuneModal
-                        isOpen={isFineTuneOpen}
-                        filters={{ maxPrice, maxTime, minRating }}
-                        onFilterChange={{
-                          setMaxPrice,
-                          setMaxTime,
-                          setMinRating,
-                        }}
-                      />
+            {/* Row 1: Preset │ Number of Boxes │ Weight */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="relative text-sm" ref={el => { if (el) presetRefs.current[index] = el; }}>
+                <InputField
+                label="Box Name"
+                id={`preset-${index}`}
+                placeholder="Select or type to search..."
+                value={
+                    box.description ||
+                    (openPresetDropdownIndex === index ? searchTerm : "")
+                }
+                onChange={e => {
+                    updateBox(index, "description", e.target.value);
+                    setSearchTerm(e.target.value);
+                }}
+                onFocus={() => {
+                    setOpenPresetDropdownIndex(index);
+                    setSearchTerm("");
+                }}
+                icon={<PackageSearch size={16} />}
+                className="text-sm"
+                autoComplete="off"
+                required
+                />
+                <AnimatePresence>
+                {openPresetDropdownIndex === index && (
+                    <motion.ul
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg max-h-48 overflow-y-auto bg-white shadow-lg"
+                    >
+                    {displayableBoxes.length > 0 ? (
+                        displayableBoxes.map((preset) => (
+                        <li
+                            key={preset._id}
+                            onClick={() => handleSelectPresetForBox(index, preset)}
+                            className="group flex justify-between items-center px-3 py-2 hover:bg-indigo-50 cursor-pointer text-slate-700 text-sm transition-colors"
+                        >
+                            <span>{preset.name}</span>
+                            <button
+                            onClick={(e) => handleDeletePreset(preset._id, e)}
+                            className="p-1.5 text-slate-400 opacity-0 group-hover:opacity-100 hover:!opacity-100 hover:text-red-600 hover:bg-red-100 rounded-full transition-all duration-200"
+                            title={`Delete "${preset.name}"`}
+                            >
+                            <Trash2 size={14} />
+                            </button>
+                        </li>
+                        ))
+                    ) : (
+                        <li className="px-4 py-2 italic text-sm text-slate-500">
+                        {savedBoxes.length === 0
+                            ? "No presets saved yet."
+                            : "No matches found."}
+                        </li>
                     )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </Card>
+                    </motion.ul>
+                )}
+                </AnimatePresence>
+            </div>
 
+            <InputField
+                label="Number of Boxes"
+                id={`count-${index}`}
+                type="number"
+                min={1}
+                value={box.count ?? ""}
+                onChange={(e) =>
+                updateBox(
+                    index,
+                    "count",
+                    e.target.valueAsNumber ?? undefined
+                )
+                }
+                placeholder="e.g., 10"
+                required
+            />
+
+            <InputField
+                label="Weight (kg)"
+                id={`weight-${index}`}
+                type="number"
+                min={0}
+                step="0.01"
+                value={box.weight ?? ""}
+                onChange={(e) =>
+                updateBox(
+                    index,
+                    "weight",
+                    e.target.valueAsNumber ?? undefined
+                )
+                }
+                placeholder="e.g., 5.5"
+                required
+            />
+            </div>
+
+            {/* Row 2: Dimensions */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <InputField
+                    label="Length (cm)"
+                    id={`length-${index}`}
+                    type="number"
+                    min={0}
+                    value={box.length ?? ""}
+                    // --- MODIFIED: Handler now also checks the max value ---
+                    onChange={(e) => handleDimensionChange(index, 'length', e.target.value, 4, MAX_DIMENSION_LENGTH)}
+                    placeholder="Length"
+                    required
+                    />
+                    {(box.length ?? 0) > MAX_DIMENSION_LENGTH && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <AlertCircle size={14} />
+                        Max length is {MAX_DIMENSION_LENGTH} cm.
+                    </p>
+                    )}
+                </div>
+                
+                <div>
+                    <InputField
+                    label="Width (cm)"
+                    id={`width-${index}`}
+                    type="number"
+                    min={0}
+                    value={box.width ?? ""}
+                    // --- MODIFIED: Handler now also checks the max value ---
+                    onChange={(e) => handleDimensionChange(index, 'width', e.target.value, 3, MAX_DIMENSION_WIDTH)}
+                    placeholder="Width"
+                    required
+                    />
+                    {(box.width ?? 0) > MAX_DIMENSION_WIDTH && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <AlertCircle size={14} />
+                        Max width is {MAX_DIMENSION_WIDTH} cm.
+                    </p>
+                    )}
+                </div>
+                
+                <div>
+                    <InputField
+                    label="Height (cm)"
+                    id={`height-${index}`}
+                    type="number"
+                    min={0}
+                    value={box.height ?? ""}
+                    // --- MODIFIED: Handler now also checks the max value ---
+                    onChange={(e) => handleDimensionChange(index, 'height', e.target.value, 3, MAX_DIMENSION_HEIGHT)}
+                    placeholder="Height"
+                    required
+                    />
+                    {(box.height ?? 0) > MAX_DIMENSION_HEIGHT && (
+                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                        <AlertCircle size={14} />
+                        Max height is {MAX_DIMENSION_HEIGHT} cm.
+                    </p>
+                    )}
+                </div>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+            <button
+                onClick={() => triggerSavePresetForBox(index)}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-indigo-700 bg-indigo-100 rounded-lg hover:bg-indigo-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
+                title="Save this box configuration as a new preset"
+            >
+                <Save size={14} />
+                Save as Preset
+            </button>
+            </div>
+        </motion.div>
+        ))}
+    </AnimatePresence>
+
+    <div className="flex justify-between items-center pt-6 border-t border-slate-200">
+        <button
+        onClick={addBoxType}
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
+        >
+        <PlusCircle size={18} /> Add Another Box Type
+        </button>
+        
+        {totalWeight > 0 && (
+        <motion.div 
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-right"
+        >
+            <p className="text-sm font-medium text-slate-500">Total Weight</p>
+            <p className="text-2xl font-bold text-slate-800">
+            {totalWeight.toFixed(2)}
+            <span className="text-base font-semibold text-slate-600 ml-1">kg</span>
+            </p>
+        </motion.div>
+        )}
+    </div>
+
+    <div className="text-center pt-6 mt-6 border-t border-slate-200">
+        {error && (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-3 bg-red-100 text-red-800 font-semibold px-4 py-3 rounded-xl mb-6 shadow-sm"
+        >
+            <AlertCircle size={20} />
+            {error}
+        </motion.div>
+        )}
+        {isAnyDimensionExceeded && !error && (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-3 bg-yellow-100 text-yellow-800 font-semibold px-4 py-3 rounded-xl mb-6 shadow-sm"
+        >
+            <AlertCircle size={20} />
+            One or more box dimensions exceed the allowed limit. Please correct them to proceed.
+        </motion.div>
+        )}
+        <motion.button
+        onClick={calculateQuotes}
+        disabled={isCalculating || isAnyDimensionExceeded}
+        whileHover={{ scale: (isCalculating || isAnyDimensionExceeded) ? 1 : 1.05 }}
+        whileTap={{ scale: (isCalculating || isAnyDimensionExceeded) ? 1 : 0.95 }}
+        className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-indigo-600 text-white text-lg font-bold rounded-full shadow-lg shadow-indigo-500/50 hover:bg-indigo-700 transition-all duration-300 disabled:opacity-60 disabled:shadow-none disabled:cursor-not-allowed"
+        >
+        {isCalculating ? (
+            <Loader2 className="animate-spin" />
+        ) : (
+            <CalculatorIcon />
+        )}
+        {isCalculating
+            ? calculationProgress || "Calculating Rates..."
+            : "Calculate Freight Cost"}
+        </motion.button>
+    </div>
+    </div>
+</Card>
+        
+        {totalBoxes > 0 && (
+          <Card>
+            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+              <Package size={22} className="mr-3 text-indigo-500" /> Shipment
+              Summary
+            </h2>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-slate-600">
+                <thead className="text-xs text-slate-700 uppercase bg-slate-100 rounded-t-lg">
+                  <tr>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3">Quantity</th>
+                    <th className="px-4 py-3">Total Weight</th>
+                    {/* MODIFIED: Volume unit changed to cm³ */}
+                    <th className="px-4 py-3">Volume (cm³)</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <AnimatePresence>
+                    {boxes.map((box, index) => {
+                      const qty = box.count || 0;
+                      const totalW = ((box.weight || 0) * qty).toFixed(2);
+                      {/* MODIFIED: Volume calculation updated to cm³ and formatted */}
+                      const totalV = (
+                        (box.length || 0) *
+                        (box.width || 0) *
+                        (box.height || 0) *
+                        qty
+                      ).toLocaleString();
+
+                      return (
+                        <motion.tr
+                          key={box.id}
+                          layout
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0, x: -30 }}
+                          className="bg-white border-b border-slate-200 hover:bg-slate-50"
+                        >
+                          <td className="px-4 py-3">
+                            {box.description ||
+                              (areDimensionsSame
+                                ? "Standard Box"
+                                : `Type ${index + 1}`)}
+                          </td>
+                          <td className="px-4 py-3">{qty}</td>
+                          <td className="px-4 py-3">{totalW} kg</td>
+                          {/* MODIFIED: Volume display updated to cm³ */}
+                          <td className="px-4 py-3">{totalV} cm³</td>
+                          <td className="px-4 py-3 flex justify-end items-center gap-2">
+                            <button
+                              onClick={() => editBox(index)}
+                              title="Edit"
+                              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-100 rounded-full transition-colors"
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            <button
+                              onClick={() => removeBox(index)}
+                              disabled={boxes.length <= 1}
+                              title="Delete"
+                              className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+                </tbody>
+
+                <tfoot>
+                  <tr className="font-semibold text-slate-800 bg-slate-50">
+                    <td colSpan={1} className="px-4 py-3 text-right">
+                      Grand Total
+                    </td>
+                    <td className="px-4 py-3">{totalBoxes} Boxes</td>
+                    <td className="px-4 py-3">{totalWeight.toFixed(2)} kg</td>
+                    <td className="px-4 py-3">
+                      {/* MODIFIED: Grand total volume calculation updated to cm³ */}
+                      {boxes
+                        .reduce(
+                          (sum, b) =>
+                            sum +
+                            ((b.length || 0) *
+                              (b.width || 0) *
+                              (b.height || 0) *
+                              (b.count || 0)),
+                          0
+                        )
+                        .toLocaleString()}{" "}
+                      cm³
+                    </td>
+                    <td className="px-4 py-3"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </Card>
+        )}
+
+        {/* --- MOVED: The content of this div is now inside the "Shipment Details" Card --- */}
+        <div className="text-center pt-4 pb-8" style={{ display: "none" }}></div>
+
+        {(data || hiddendata) && (
+          <>
+            <Card>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 mb-2 flex items-center">
+                    <Award size={22} className="mr-3 text-indigo-500" /> Sort &
+                    Filter Results
+                  </h2>
+                  <p className="text-sm text-slate-500 mb-6">
+                    Quickly organize quotes by price, speed, or vendor rating.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="flex-grow w-full grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <SortOptionButton
+                    label="Lowest Price"
+                    icon={<IndianRupee size={16} />}
+                    selected={sortBy === "price"}
+                    onClick={() => setSortBy("price")}
+                  />
+                  <SortOptionButton
+                    label="Fastest"
+                    icon={<Zap size={16} />}
+                    selected={sortBy === "time"}
+                    onClick={() => setSortBy("time")}
+                  />
+                  <SortOptionButton
+                    label="Highest Rated"
+                    icon={<Award size={16} />}
+                    selected={sortBy === "rating"}
+                    onClick={() => setSortBy("rating")}
+                  />
+                </div>
+                <div className="relative w-full sm:w-auto" ref={fineTuneRef}>
+                  <button
+                    onClick={() => setIsFineTuneOpen((prev) => !prev)}
+                    className="w-full px-5 py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors border border-slate-300"
+                  >
+                    Fine-Tune Sort
+                  </button>
+                  <AnimatePresence>
+                    {isFineTuneOpen && (
+                      <FineTuneModal
+                        isOpen={isFineTuneOpen}
+                        filters={{ maxPrice, maxTime, minRating }}
+                        onFilterChange={{
+                          setMaxPrice,
+                          setMaxTime,
+                          setMinRating,
+                        }}
+                      />
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </Card>
             <div id="results" className="space-y-12">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1108,6 +1208,7 @@ const CalculatorPage: React.FC = () => {
                   };
                   const tiedUpVendors = processQuotes(data);
                   const otherVendors = processQuotes(hiddendata);
+                  
 
                   if (isCalculating) return null; // Don't render results while calculating
 
@@ -1191,62 +1292,62 @@ const FineTuneModal = ({
     onFilterChange: { setMaxPrice: (val: number) => void; setMaxTime: (val: number) => void; setMinRating: (val: number) => void; };
   }) => {
   
-    const formatPrice = (value: number) => {
-      if (value >= 10000000) return "Any";
-      if (value >= 100000) return `${(value / 100000).toFixed(1)} Lakh`;
-      return new Intl.NumberFormat('en-IN').format(value);
-    };
+  const formatPrice = (value: number) => {
+    if (value >= 10000000) return "Any";
+    if (value >= 100000) return `${(value / 100000).toFixed(1)} Lakh`;
+    return new Intl.NumberFormat('en-IN').format(value);
+  };
 
-    const formatTime = (value: number) => {
-        if (value >= 300) return "Any";
-        return `${value} Days`;
-    }
+  const formatTime = (value: number) => {
+      if (value >= 300) return "Any";
+      return `${value} Days`;
+  }
   
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-        className="absolute top-full right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 z-20 p-5 space-y-5"
-      >
-        <div className="space-y-2">
-            <div className="flex justify-between items-center text-sm">
-                <label htmlFor="maxPrice" className="font-semibold text-slate-700">Max Price</label>
-                <span className="font-bold text-indigo-600">₹ {formatPrice(filters.maxPrice)}</span>
-            </div>
-            <input
-                id="maxPrice" type="range" min="1000" max="10000000" step="1000"
-                value={filters.maxPrice} onChange={(e) => onFilterChange.setMaxPrice(e.target.valueAsNumber)}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-            />
-        </div>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="absolute top-full right-0 mt-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 z-20 p-5 space-y-5"
+    >
+      <div className="space-y-2">
+          <div className="flex justify-between items-center text-sm">
+              <label htmlFor="maxPrice" className="font-semibold text-slate-700">Max Price</label>
+              <span className="font-bold text-indigo-600">₹ {formatPrice(filters.maxPrice)}</span>
+          </div>
+          <input
+              id="maxPrice" type="range" min="1000" max="10000000" step="1000"
+              value={filters.maxPrice} onChange={(e) => onFilterChange.setMaxPrice(e.target.valueAsNumber)}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+          />
+      </div>
 
-        <div className="space-y-2">
-            <div className="flex justify-between items-center text-sm">
-                <label htmlFor="maxTime" className="font-semibold text-slate-700">Max Delivery Time</label>
-                <span className="font-bold text-indigo-600">{formatTime(filters.maxTime)}</span>
-            </div>
-            <input
-                id="maxTime" type="range" min="1" max="300" step="1"
-                value={filters.maxTime} onChange={(e) => onFilterChange.setMaxTime(e.target.valueAsNumber)}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-            />
-        </div>
-        
-        <div className="space-y-2">
-            <div className="flex justify-between items-center text-sm">
-                <label htmlFor="minRating" className="font-semibold text-slate-700">Min Vendor Rating</label>
-                <span className="font-bold text-indigo-600">{filters.minRating.toFixed(1)} / 5.0</span>
-            </div>
-            <input
-                id="minRating" type="range" min="0" max="5" step="0.1"
-                value={filters.minRating} onChange={(e) => onFilterChange.setMinRating(e.target.valueAsNumber)}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-            />
-        </div>
-      </motion.div>
-    );
+      <div className="space-y-2">
+          <div className="flex justify-between items-center text-sm">
+              <label htmlFor="maxTime" className="font-semibold text-slate-700">Max Delivery Time</label>
+              <span className="font-bold text-indigo-600">{formatTime(filters.maxTime)}</span>
+          </div>
+          <input
+              id="maxTime" type="range" min="1" max="300" step="1"
+              value={filters.maxTime} onChange={(e) => onFilterChange.setMaxTime(e.target.valueAsNumber)}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+          />
+      </div>
+      
+      <div className="space-y-2">
+          <div className="flex justify-between items-center text-sm">
+              <label htmlFor="minRating" className="font-semibold text-slate-700">Min Vendor Rating</label>
+              <span className="font-bold text-indigo-600">{filters.minRating.toFixed(1)} / 5.0</span>
+          </div>
+          <input
+              id="minRating" type="range" min="0" max="5" step="0.1"
+              value={filters.minRating} onChange={(e) => onFilterChange.setMinRating(e.target.valueAsNumber)}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+          />
+      </div>
+    </motion.div>
+  );
 };
 
 
@@ -1331,7 +1432,7 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
     { label: "ODA Charges", key: "odaCharges" },
     { label: "Fuel Surcharge", key: "fuelCharges" },
     { label: "Handling Charges", key: "handlingCharges" },
-    { label: "Insurance Charges", key: "insuaranceCharges" },
+    { label: "Insurance Charges", key: "insuranceCharges" },
     { label: "Green Tax", key: "greenTax" },
     { label: "Appointment Charges", key: "appointmentCharges" },
     { label: "Minimum Charges", key: "minCharges" },
@@ -1365,7 +1466,7 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
         <div className="border-t border-slate-200 mt-4 pt-4">
             <h4 className="font-semibold text-slate-700 mb-3">Shipment Info</h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-slate-500">Chargeable Wt:</span><span className="font-medium text-slate-800">{quote.chargeableWeight} Kg</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Chargeable Wt:</span><span className="font-medium text-slate-800">{quote.chargeableWeight.toFixed(2)} Kg</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Distance:</span><span className="font-medium text-slate-800">{quote.distance}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Origin:</span><span className="font-medium text-slate-800">{quote.originPincode}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">Destination:</span><span className="font-medium text-slate-800">{quote.destinationPincode}</span></div>
@@ -1495,21 +1596,23 @@ const VendorResultCard = ({
             </div>
             
             <div className="flex items-center justify-end gap-x-2 -mt-1">
-              <span className="text-xs text-slate-500">Total Charges</span>
-              <span className="text-slate-300">·</span>
-              <button
+                <span className="text-xs text-slate-500">Total Charges</span>
+                <span className="text-slate-300">·</span>
+                <button
                 onClick={handleMoreDetailsClick}
                 className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-              >
+                >
                 Contact Now
-              </button>
+                </button>
             </div>
           </div>
 
           <div className="flex-1 md:flex-initial mt-0 md:mt-2">
             <div className="flex items-center justify-end gap-2 font-semibold text-slate-700 text-lg">
               <Clock size={16} className="text-slate-500" />
-              <span>{quote.estimatedTime} Days</span>
+              <span>
+    {Math.ceil(quote.estimatedTime)} {Math.ceil(quote.estimatedTime) === 1 ? 'Day' : 'Days'}
+  </span>
             </div>
             <div className="text-xs text-slate-500">Est. Delivery</div>
           </div>
