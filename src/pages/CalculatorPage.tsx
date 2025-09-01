@@ -2218,7 +2218,7 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
                           </tr>
                         ))}
                         <tr className="border-t-2 border-yellow-300">
-                          <td colSpan="4" className="py-3 text-black font-bold text-right">Total:</td>
+                          <td colSpan={4} className="py-3 text-black font-bold text-right">Total:</td>
                           <td className="py-3 text-black font-bold text-right text-xl">₹{(quote.totalCharges || quote.price || quote.loadSplit?.totalPrice || 0).toLocaleString()}</td>
                         </tr>
                       </tbody>
