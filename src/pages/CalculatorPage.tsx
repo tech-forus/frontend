@@ -426,7 +426,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     if (!user || !token) return;
     try {
       const response = await axios.get(
-        `https://tester-backend-4nxc.onrender.com/api/transporter/getpackinglist?customerId=${
+        `https://backend-bcxr.onrender.com/api/transporter/getpackinglist?customerId=${
           (user as any).customer._id
         }`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -491,7 +491,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     };
     try {
       await axios.post(
-        `https://tester-backend-4nxc.onrender.com/api/transporter/savepackinglist`,
+        `https://backend-bcxr.onrender.com/api/transporter/savepackinglist`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -514,7 +514,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     if (window.confirm("Delete this preset permanently?")) {
       try {
         await axios.delete(
-          `https://tester-backend-4nxc.onrender.com/api/transporter/deletepackinglist/${presetId}`,
+          `https://backend-bcxr.onrender.com/api/transporter/deletepackinglist/${presetId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         await fetchSavedBoxes();
@@ -552,7 +552,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
   // Distance via backend wrapper
   async function getDistanceKmByAPI(originPin: string, destPin: string) {
     const apiBase =
-      import.meta.env.VITE_API_BASE_URL || "https://tester-backend-4nxc.onrender.com";
+      import.meta.env.VITE_API_BASE_URL || "https://backend-bcxr.onrender.com";
     const resp = await fetch(`${apiBase}/api/vendor/wheelseye-distance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -574,7 +574,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
   ) {
     try {
       const apiBase =
-        import.meta.env.VITE_API_BASE_URL || "https://tester-backend-4nxc.onrender.com";
+        import.meta.env.VITE_API_BASE_URL || "https://backend-bcxr.onrender.com";
       const requestBody: any = {
         distance: distance,
       };
@@ -635,7 +635,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
       const headers =
         token ? { Authorization: `Bearer ${token}` } : undefined; // don't send Bearer undefined
       const response = await axios.post(
-        "https://tester-backend-4nxc.onrender.com/api/transporter/validate-pincode",
+        "https://backend-bcxr.onrender.com/api/transporter/validate-pincode",
         { pincode },
         { headers }
       );
@@ -759,7 +759,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
 
     try {
       const resp = await axios.post(
-        "https://tester-backend-4nxc.onrender.com/api/transporter/calculate",
+        "https://backend-bcxr.onrender.com/api/transporter/calculate",
         {
           customerID: (user as any).customer._id,
           userogpincode: (user as any).customer.pincode,
