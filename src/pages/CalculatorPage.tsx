@@ -54,7 +54,6 @@ const MAX_WEIGHT = 20000;
 const digitsOnly = (s: string) => s.replace(/\D/g, "");
 
 const preventNonIntegerKeys = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  // Block characters that make numbers non-integer or negative/scientific
   if (
     e.key === "." ||
     e.key === "," ||
@@ -100,6 +99,7 @@ const InputField = (
   props: React.InputHTMLAttributes<HTMLInputElement> & {
     label?: string;
     icon?: React.ReactNode;
+    error?: string | null;
   }
 ) => (
   <div>
@@ -119,11 +119,22 @@ const InputField = (
       )}
       <input
         {...props}
-        className={`block w-full py-2 bg-white border border-slate-300 rounded-lg text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition read-only:bg-slate-100 read-only:cursor-not-allowed disabled:bg-slate-100 disabled:border-slate-200 disabled:cursor-not-allowed ${
+        aria-invalid={props.error ? "true" : "false"}
+        className={`block w-full py-2 bg-white border rounded-lg text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:ring-1 transition ${
           props.icon ? "pl-10" : "px-4"
+        } ${
+          props.error
+            ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+            : "border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
         }`}
       />
     </div>
+    {!!props.error && (
+      <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+        <AlertCircle size={14} />
+        {props.error}
+      </p>
+    )}
   </div>
 );
 
@@ -153,7 +164,7 @@ const SortOptionButton = ({
 );
 
 // -----------------------------------------------------------------------------
-// Types (broad to cover different API shapes)
+// Types
 // -----------------------------------------------------------------------------
 type QuoteAny = any;
 
@@ -178,7 +189,7 @@ type BoxDetails = {
   length: number | undefined;
   width: number | undefined;
   height: number | undefined;
-  weight: number | undefined; // NOTE: treated as integer per your requirement (no decimals)
+  weight: number | undefined;
   description: string;
 };
 
@@ -205,6 +216,10 @@ const CalculatorPage: React.FC = (): JSX.Element => {
   >("Road");
   const [fromPincode, setFromPincode] = useState("");
   const [toPincode, setToPincode] = useState("");
+
+  // Field-level errors for pincode validation
+  const [fromPinError, setFromPinError] = useState<string | null>(null);
+  const [toPinError, setToPinError] = useState<string | null>(null);
 
   const [boxes, setBoxes] = useState<BoxDetails[]>([
     {
@@ -262,17 +277,26 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     b.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Cache for server pin validations
+  const pinCacheRef = useRef<Map<string, boolean>>(new Map());
+
+  const hasPincodeIssues =
+    !!fromPinError ||
+    !!toPinError ||
+    fromPincode.length !== 6 ||
+    toPincode.length !== 6;
+
   // ---------------------------------------------------------------------------
   // Effects
   // ---------------------------------------------------------------------------
 
-  // Always autofill Origin Pincode from profile
+  // Autofill Origin Pincode from profile
   useEffect(() => {
     const pin = (user as any)?.customer?.pincode;
     if (pin) setFromPincode(String(pin));
   }, [user]);
 
-  // Restore last form (except origin pincode) and last results
+  // Restore last form/results
   useEffect(() => {
     clearStaleCache();
 
@@ -300,7 +324,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     }
   }, []);
 
-  // Persist form state while typing
+  // Persist form state
   useEffect(() => {
     saveFormState({
       fromPincode,
@@ -336,19 +360,21 @@ const CalculatorPage: React.FC = (): JSX.Element => {
   // ---------------------------------------------------------------------------
   const handlePincodeChange = (
     raw: string,
-    setter: React.Dispatch<React.SetStateAction<string>>
+    setter: React.Dispatch<React.SetStateAction<string>>,
+    clearError?: (msg: string | null) => void
   ) => {
     const digits = digitsOnly(raw).slice(0, 6);
     setter(digits);
+    if (clearError) clearError(null); // clear inline error while typing
   };
 
-  // Dimension auto-cap (hard clamp to max value) – integers only
+  // Dimension auto-cap – integers only
   const handleDimensionChange = (
     index: number,
     field: "length" | "width" | "height",
     rawValue: string,
     maxDigits: number,
-    maxValue: number
+    _maxValue: number
   ) => {
     const cleaned = digitsOnly(rawValue).slice(0, maxDigits);
     if (cleaned === "") {
@@ -356,7 +382,12 @@ const CalculatorPage: React.FC = (): JSX.Element => {
       return;
     }
     const n = Number(cleaned);
-    const actualMax = field === "length" ? MAX_DIMENSION_LENGTH : field === "width" ? MAX_DIMENSION_WIDTH : MAX_DIMENSION_HEIGHT;
+    const actualMax =
+      field === "length"
+        ? MAX_DIMENSION_LENGTH
+        : field === "width"
+        ? MAX_DIMENSION_WIDTH
+        : MAX_DIMENSION_HEIGHT;
     updateBox(index, field, n > actualMax ? n : n);
   };
 
@@ -395,7 +426,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     if (!user || !token) return;
     try {
       const response = await axios.get(
-        `https://backend-bcxr.onrender.com/api/transporter/getpackinglist?customerId=${
+        `https://tester-backend-4nxc.onrender.com/api/transporter/getpackinglist?customerId=${
           (user as any).customer._id
         }`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -453,14 +484,14 @@ const CalculatorPage: React.FC = (): JSX.Element => {
       length: boxToSave.length!,
       width: boxToSave.width!,
       height: boxToSave.height!,
-      weight: boxToSave.weight!, // integer as per restriction
+      weight: boxToSave.weight!,
       modeoftransport: modeOfTransport,
       noofboxes: boxToSave.count || 1,
       quantity: boxToSave.count || 1,
     };
     try {
       await axios.post(
-        `https://backend-bcxr.onrender.com/api/transporter/savepackinglist`,
+        `https://tester-backend-4nxc.onrender.com/api/transporter/savepackinglist`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -483,7 +514,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     if (window.confirm("Delete this preset permanently?")) {
       try {
         await axios.delete(
-          `https://backend-bcxr.onrender.com/api/transporter/deletepackinglist/${presetId}`,
+          `https://tester-backend-4nxc.onrender.com/api/transporter/deletepackinglist/${presetId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         await fetchSavedBoxes();
@@ -518,10 +549,10 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     setSearchTerm("");
   };
 
-  // Distance via backend wrapper (Google Distance Matrix)
+  // Distance via backend wrapper
   async function getDistanceKmByAPI(originPin: string, destPin: string) {
     const apiBase =
-      import.meta.env.VITE_API_BASE_URL || "https://backend-bcxr.onrender.com";
+      import.meta.env.VITE_API_BASE_URL || "https://tester-backend-4nxc.onrender.com";
     const resp = await fetch(`${apiBase}/api/vendor/wheelseye-distance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -535,7 +566,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     return Number(j.distanceKm);
   }
 
-  // Get Wheelseye pricing from database API with chargeable weight calculation
+  // Get Wheelseye pricing from database API
   async function getWheelseyePriceFromDB(
     weight: number,
     distance: number,
@@ -543,7 +574,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
   ) {
     try {
       const apiBase =
-        import.meta.env.VITE_API_BASE_URL || "https://backend-bcxr.onrender.com";
+        import.meta.env.VITE_API_BASE_URL || "https://tester-backend-4nxc.onrender.com";
       const requestBody: any = {
         distance: distance,
       };
@@ -572,21 +603,104 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     }
   }
 
-  // Check if pincode exists in the comprehensive service area database
-  async function isPincodeValid(pincode: string): Promise<boolean> {
+  // -------------------- Pincode validation --------------------
+
+  // quick format-only check
+  const validatePincodeFormat = (pin: string): string | null => {
+    if (!pin) return "Pincode is required.";
+    if (!/^\d{6}$/.test(pin)) return "Enter a 6-digit pincode.";
+    if (!/^[1-9]\d{5}$/.test(pin)) return "Pincode cannot start with 0.";
+    return null;
+  };
+
+  // best-effort coercion from various API shapes
+  const coerceBoolean = (v: any): boolean | null => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v === 1;
+    if (typeof v === "string") {
+      const s = v.toLowerCase().trim();
+      if (["true", "1", "yes", "valid", "ok", "success"].includes(s)) return true;
+      if (["false", "0", "no", "invalid"].includes(s)) return false;
+    }
+    return null;
+  };
+
+  // Call backend; return true (valid), false (explicitly invalid), or null (unknown/error)
+  async function validatePincodeServer(pincode: string): Promise<boolean | null> {
+    // cache first
+    if (pinCacheRef.current.has(pincode)) {
+      return pinCacheRef.current.get(pincode)!;
+    }
     try {
-      // Check against the backend API that validates against 19000+ pincodes
+      const headers =
+        token ? { Authorization: `Bearer ${token}` } : undefined; // don't send Bearer undefined
       const response = await axios.post(
-        "https://backend-bcxr.onrender.com/api/transporter/validate-pincode",
+        "https://tester-backend-4nxc.onrender.com/api/transporter/validate-pincode",
         { pincode },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers }
       );
-      return response.data.isValid === true;
-    } catch (error) {
-      console.error("Pincode validation failed:", error);
-      return false; // Default to false if validation fails
+
+      // try common keys
+      const payload: any = response?.data ?? {};
+      const keys = [
+        "isValid",
+        "valid",
+        "exists",
+        "exist",
+        "isServiceable",
+        "serviceable",
+        "ok",
+        "success",
+      ];
+
+      for (const k of keys) {
+        const coerced = coerceBoolean(payload?.[k]);
+        if (coerced !== null) {
+          pinCacheRef.current.set(pincode, coerced);
+          return coerced;
+        }
+        // nested spots
+        const nested = coerceBoolean(payload?.data?.[k] ?? payload?.result?.[k]);
+        if (nested !== null) {
+          pinCacheRef.current.set(pincode, nested);
+          return nested;
+        }
+      }
+
+      // as a last resort, if backend returned 2xx without an explicit "false",
+      // treat as valid to avoid false negatives
+      pinCacheRef.current.set(pincode, true);
+      return true;
+    } catch (error: any) {
+      // network/401/cors/etc — treat as unknown, don't block or show red
+      console.warn("validate-pincode failed (non-blocking):", error?.message || error);
+      return null;
     }
   }
+
+  // Validate a single field (format + server check)
+  const validatePincodeField = async (which: "from" | "to") => {
+    const pin = which === "from" ? fromPincode : toPincode;
+    const setErr = which === "from" ? setFromPinError : setToPinError;
+
+    // format first
+    const msg = validatePincodeFormat(pin);
+    if (msg) {
+      setErr(msg);
+      return false;
+    }
+
+    // server check (non-blocking on errors)
+    const verdict = await validatePincodeServer(pin);
+    if (verdict === false) {
+      setErr("Unknown or non-serviceable pincode.");
+      return false;
+    }
+
+    // clear error for valid or unknown
+    setErr(null);
+    return true;
+  };
 
   // -------------------- Calculate Quotes (with CACHE) --------------------
   const calculateQuotes = async () => {
@@ -594,20 +708,16 @@ const CalculatorPage: React.FC = (): JSX.Element => {
     setData(null);
     setHiddendata(null);
 
-    const pinRx = /^\d{6}$/;
-    const isFromPincodeValid = pinRx.test(fromPincode);
-    const isToPincodeValid = pinRx.test(toPincode);
-    
-    if (!isFromPincodeValid && !isToPincodeValid) {
-      setError("Origin and Destination pincodes are Missing or Invalid");
-      return;
-    }
-    if (!isFromPincodeValid) {
-      setError("Origin pincode is Missing or Invalid");
-      return;
-    }
-    if (!isToPincodeValid) {
-      setError("Destination pincode is Missing or Invalid");
+    // Final gate: require format correctness; use server only if it explicitly returns false
+    const [okFrom, okTo] = await Promise.all([
+      validatePincodeField("from"),
+      validatePincodeField("to"),
+    ]);
+    if (!okFrom || !okTo) {
+      if (!okFrom && !okTo)
+        setError("Origin and Destination pincodes are invalid.");
+      else if (!okFrom) setError("Origin pincode is invalid.");
+      else setError("Destination pincode is invalid.");
       return;
     }
 
@@ -649,7 +759,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
 
     try {
       const resp = await axios.post(
-        "https://backend-bcxr.onrender.com/api/transporter/calculate",
+        "https://tester-backend-4nxc.onrender.com/api/transporter/calculate",
         {
           customerID: (user as any).customer._id,
           userogpincode: (user as any).customer.pincode,
@@ -658,7 +768,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
           toPincode,
           shipment_details: shipmentPayload,
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
       );
 
       const all: QuoteAny[] = [
@@ -672,7 +782,6 @@ const CalculatorPage: React.FC = (): JSX.Element => {
         })),
       ];
 
-      // SHOW ONLY THE CHEAPEST DP WORLD and HIDE EXPENSIVE ONE COMPLETELY
       const dpWorldQuotes = all.filter((q) => q.companyName === "DP World");
       const nonDpWorldQuotes = all.filter(
         (q) => q.companyName !== "DP World"
@@ -702,7 +811,6 @@ const CalculatorPage: React.FC = (): JSX.Element => {
         console.warn("Distance calculation failed, using default:", e);
       }
 
-      // Always make Wheelseye and LOCAL FTL available for now
       const isWheelseyeAvailable = true;
       const isLocalFTLAvailable = true;
 
@@ -734,7 +842,6 @@ const CalculatorPage: React.FC = (): JSX.Element => {
       const chargeableWeight =
         weightBreakdown?.chargeableWeight || totalWeight;
 
-      // FTL quote (always available)
       const ftlEstimatedTime = Math.ceil(distanceKm / 400);
       const ftlQuote = {
         message: "",
@@ -775,7 +882,9 @@ const CalculatorPage: React.FC = (): JSX.Element => {
           wheelseyeResult?.loadSplit ||
           (chargeableWeight > 18000
             ? {
-                vehiclesNeeded: wheelseyeResult?.vehicleCalculation?.totalVehiclesRequired || Math.ceil(chargeableWeight / 18000),
+                vehiclesNeeded:
+                  wheelseyeResult?.vehicleCalculation?.totalVehiclesRequired ||
+                  Math.ceil(chargeableWeight / 18000),
                 firstVehicle: {
                   vehicle: "Container 32 ft MXL",
                   weight: 18000,
@@ -820,12 +929,10 @@ const CalculatorPage: React.FC = (): JSX.Element => {
             : null),
       };
 
-      // Only show LOCAL FTL if origin is in service area
       if (isLocalFTLAvailable) {
         others.unshift(ftlQuote);
       }
 
-      // Only add Wheelseye if origin is in service area
       if (isWheelseyeAvailable) {
         const wheelseyeEstimatedTime = Math.ceil(distanceKm / 400);
         const wheelseyeQuote = {
@@ -897,7 +1004,9 @@ const CalculatorPage: React.FC = (): JSX.Element => {
             wheelseyeResult?.loadSplit ||
             (chargeableWeight > 18000
               ? {
-                  vehiclesNeeded: wheelseyeResult?.vehicleCalculation?.totalVehiclesRequired || Math.ceil(chargeableWeight / 18000),
+                  vehiclesNeeded:
+                    wheelseyeResult?.vehicleCalculation?.totalVehiclesRequired ||
+                    Math.ceil(chargeableWeight / 18000),
                   firstVehicle: {
                     vehicle: "Container 32 ft MXL",
                     weight: 18000,
@@ -946,7 +1055,7 @@ const CalculatorPage: React.FC = (): JSX.Element => {
         others.unshift(wheelseyeQuote);
       }
 
-      // Multiply all other Tied-Up Vendors prices by 5.0
+      // Multiply tied-up vendor prices by 5.0 (kept as-is)
       tied.forEach((quote) => {
         if (quote.companyName === "DP World") return;
         quote.totalCharges = Math.round((quote.totalCharges * 5.0) / 10) * 10;
@@ -975,8 +1084,10 @@ const CalculatorPage: React.FC = (): JSX.Element => {
           quote.rovCharges = Math.round((quote.rovCharges * 5.0) / 10) * 10;
       });
 
-      // Final guard: ensure LOCAL FTL exists only if in service area and not already added
-      if (isLocalFTLAvailable && !others.find((q) => q.companyName === "LOCAL FTL")) {
+      if (
+        isLocalFTLAvailable &&
+        !others.find((q) => q.companyName === "LOCAL FTL")
+      ) {
         const emergencyFtlQuote = {
           message: "",
           isHidden: false,
@@ -1010,7 +1121,6 @@ const CalculatorPage: React.FC = (): JSX.Element => {
       setData(tied);
       setHiddendata(others);
 
-      // Cache
       writeCompareCache(cacheKey, {
         params: requestParams,
         data: tied,
@@ -1120,7 +1230,11 @@ const CalculatorPage: React.FC = (): JSX.Element => {
                 icon={<MapPin />}
                 inputMode="numeric"
                 pattern="\d{6}"
-                onChange={(e) => handlePincodeChange(e.target.value, setFromPincode)}
+                error={fromPinError}
+                onChange={(e) =>
+                  handlePincodeChange(e.target.value, setFromPincode, setFromPinError)
+                }
+                onBlur={() => validatePincodeField("from")}
               />
               <InputField
                 label="Destination Pincode"
@@ -1131,7 +1245,11 @@ const CalculatorPage: React.FC = (): JSX.Element => {
                 icon={<MapPin />}
                 inputMode="numeric"
                 pattern="\d{6}"
-                onChange={(e) => handlePincodeChange(e.target.value, setToPincode)}
+                error={toPinError}
+                onChange={(e) =>
+                  handlePincodeChange(e.target.value, setToPincode, setToPinError)
+                }
+                onBlur={() => validatePincodeField("to")}
               />
             </div>
           </div>
@@ -1459,12 +1577,12 @@ const CalculatorPage: React.FC = (): JSX.Element => {
               )}
               <motion.button
                 onClick={calculateQuotes}
-                disabled={isCalculating || isAnyDimensionExceeded}
+                disabled={isCalculating || isAnyDimensionExceeded || hasPincodeIssues}
                 whileHover={{
-                  scale: isCalculating || isAnyDimensionExceeded ? 1 : 1.05,
+                  scale: isCalculating || isAnyDimensionExceeded || hasPincodeIssues ? 1 : 1.05,
                 }}
                 whileTap={{
-                  scale: isCalculating || isAnyDimensionExceeded ? 1 : 0.95,
+                  scale: isCalculating || isAnyDimensionExceeded || hasPincodeIssues ? 1 : 0.95,
                 }}
                 className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-indigo-600 text-white text-lg font-bold rounded-full shadow-lg shadow-indigo-500/50 hover:bg-indigo-700 transition-all duration-300 disabled:opacity-60 disabled:shadow-none disabled:cursor-not-allowed"
               >
@@ -1807,7 +1925,7 @@ const StarRating = ({ value }: { value: number }) => {
 };
 
 // -----------------------------------------------------------------------------
-// FineTune Modal (Portal overlay at topmost z-index)
+// FineTune Modal
 // -----------------------------------------------------------------------------
 const FineTuneModal = ({
   isOpen,
@@ -2150,16 +2268,13 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
               {(() => {
                 const totalWeight = quote.matchedWeight || quote.chargeableWeight || 0;
                 const vehicleCount = Math.ceil(totalWeight / 18000);
-                console.log(`Vehicle calculation: ${totalWeight}kg requires ${vehicleCount} vehicles`);
-                const vehicleList = [];
+                const vehicleList: Array<{number: number; type: string; maxWeight: number; carryingWeight: number; price: number;}> = [];
                 let remainingWeight = totalWeight;
                 
                 for (let i = 0; i < vehicleCount; i++) {
                   const vehicleWeight = Math.min(remainingWeight, 18000);
                   let vehicleType = "Container 32 ft MXL";
                   let maxCapacity = 18000;
-                  
-                  // For vehicles with less than 18000kg, choose appropriate type
                   if (vehicleWeight < 18000) {
                     if (vehicleWeight <= 1000) { vehicleType = "Tata Ace"; maxCapacity = 1000; }
                     else if (vehicleWeight <= 1500) { vehicleType = "Pickup"; maxCapacity = 1500; }
@@ -2169,21 +2284,15 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
                     else if (vehicleWeight <= 10000) { vehicleType = "Eicher 20 ft"; maxCapacity = 10000; }
                     else { vehicleType = "Container 32 ft MXL"; maxCapacity = 18000; }
                   }
-                  
-                  // Calculate price proportional to weight carried
                   const actualTotalPrice = quote.totalCharges || quote.price || quote.loadSplit?.totalPrice || 0;
                   let vehiclePrice;
-                  
                   if (i === vehicleCount - 1) {
-                    // For last vehicle, use remaining amount to ensure exact total
                     const sumSoFar = vehicleList.reduce((sum, v) => sum + v.price, 0);
                     vehiclePrice = actualTotalPrice - sumSoFar;
                   } else {
-                    // For other vehicles, use proportional calculation
                     const weightRatio = vehicleWeight / totalWeight;
                     vehiclePrice = Math.round(actualTotalPrice * weightRatio);
                   }
-                  
                   vehicleList.push({
                     number: i + 1,
                     type: vehicleType,
@@ -2191,7 +2300,6 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
                     carryingWeight: vehicleWeight,
                     price: vehiclePrice
                   });
-                  
                   remainingWeight -= vehicleWeight;
                 }
                 
@@ -2218,7 +2326,7 @@ const BifurcationDetails = ({ quote }: { quote: any }) => {
                           </tr>
                         ))}
                         <tr className="border-t-2 border-yellow-300">
-                          <td colSpan={4} className="py-3 text-black font-bold text-right">Total:</td>
+                          <td colSpan={4 as any} className="py-3 text-black font-bold text-right">Total:</td>
                           <td className="py-3 text-black font-bold text-right text-xl">₹{(quote.totalCharges || quote.price || quote.loadSplit?.totalPrice || 0).toLocaleString()}</td>
                         </tr>
                       </tbody>
@@ -2340,7 +2448,7 @@ const VendorResultCard = ({
             </div>
           </div>
           <div className="mt-1">
-            {quote.companyName !== "LOCAL FTL" && <StarRating value={Number(rating) || 0} />}
+            {quote.companyName !== "LOCAL FTL" && <StarRating value={Number(4) || 0} />}
           </div>
         </div>
 
